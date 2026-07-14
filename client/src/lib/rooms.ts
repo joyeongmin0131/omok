@@ -265,9 +265,14 @@ export async function respondUndo(roomId: string, accept: boolean): Promise<void
 
 // 방 하나를 실시간 구독. onSnapshot 콜백은 방이 바뀔 때마다(내가 두거나, 상대가 두거나) 계속 호출된다.
 export function subscribeRoom(roomId: string, cb: (room: RoomState | null) => void): () => void {
-  return onSnapshot(doc(db, 'rooms', roomId), (snap) => {
-    cb(snap.exists() ? toRoomState(snap.id, snap.data() as RoomDoc) : null)
-  })
+  return onSnapshot(
+    doc(db, 'rooms', roomId),
+    (snap) => cb(snap.exists() ? toRoomState(snap.id, snap.data() as RoomDoc) : null),
+    (err) => {
+      console.warn('방 정보를 불러오지 못했어요:', err.message)
+      cb(null)
+    },
+  )
 }
 
 export interface OpenRoomSummary {
@@ -279,14 +284,21 @@ export interface OpenRoomSummary {
 // 로비/게임모드 화면의 "입장 가능한 방 목록" — 실시간으로 갱신됨
 export function subscribeOpenRooms(cb: (rooms: OpenRoomSummary[]) => void): () => void {
   const q = query(collection(db, 'rooms'), where('status', '==', 'waiting'))
-  return onSnapshot(q, (snap) => {
-    const list = snap.docs.map((d) => {
-      const data = d.data() as RoomDoc
-      return { id: d.id, title: data.title, host: data.hostNickname, createdAtMs: data.createdAt?.toMillis() ?? 0 }
-    })
-    list.sort((a, b) => b.createdAtMs - a.createdAtMs)
-    cb(list.map(({ createdAtMs: _createdAtMs, ...rest }) => rest))
-  })
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map((d) => {
+        const data = d.data() as RoomDoc
+        return { id: d.id, title: data.title, host: data.hostNickname, createdAtMs: data.createdAt?.toMillis() ?? 0 }
+      })
+      list.sort((a, b) => b.createdAtMs - a.createdAtMs)
+      cb(list.map(({ createdAtMs: _createdAtMs, ...rest }) => rest))
+    },
+    (err) => {
+      console.warn('입장 가능한 방 목록을 불러오지 못했어요:', err.message)
+      cb([])
+    },
+  )
 }
 
 export interface ActiveRoomSummary {
@@ -303,17 +315,24 @@ export interface ActiveRoomSummary {
 // (예: 초대 버튼 비활성화) 판단할 수 있게 한다.
 export function subscribeActiveRooms(cb: (rooms: ActiveRoomSummary[]) => void): () => void {
   const q = query(collection(db, 'rooms'), where('status', '==', 'playing'))
-  return onSnapshot(q, (snap) => {
-    cb(
-      snap.docs.map((d) => {
-        const data = d.data() as RoomDoc
-        return {
-          id: d.id, title: data.title,
-          host: data.hostNickname, hostId: data.hostId,
-          guest: data.guestNickname ?? '', guestId: data.guestId ?? '',
-          moveCount: data.moveCount,
-        }
-      }),
-    )
-  })
+  return onSnapshot(
+    q,
+    (snap) => {
+      cb(
+        snap.docs.map((d) => {
+          const data = d.data() as RoomDoc
+          return {
+            id: d.id, title: data.title,
+            host: data.hostNickname, hostId: data.hostId,
+            guest: data.guestNickname ?? '', guestId: data.guestId ?? '',
+            moveCount: data.moveCount,
+          }
+        }),
+      )
+    },
+    (err) => {
+      console.warn('진행 중인 게임 목록을 불러오지 못했어요:', err.message)
+      cb([])
+    },
+  )
 }

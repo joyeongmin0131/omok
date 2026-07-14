@@ -52,20 +52,24 @@ export function subscribeSpectators(roomId: string, cb: (spectators: Spectator[]
     cb(cached.filter((s) => s.lastActiveMs >= cutoff).map(({ lastActiveMs: _lastActiveMs, ...rest }) => rest))
   }
 
-  const unsubscribeSnapshot = onSnapshot(collection(db, 'rooms', roomId, 'spectators'), (snap) => {
-    cached = snap.docs.map((d) => {
-      const data = d.data()
-      const lastActiveAt = data.lastActiveAt as Timestamp | undefined
-      return {
-        userId: d.id,
-        nickname: data.nickname,
-        character: data.character,
-        photoUrl: data.photoUrl ?? null,
-        lastActiveMs: lastActiveAt ? lastActiveAt.toMillis() : 0,
-      }
-    })
-    emitFiltered()
-  })
+  const unsubscribeSnapshot = onSnapshot(
+    collection(db, 'rooms', roomId, 'spectators'),
+    (snap) => {
+      cached = snap.docs.map((d) => {
+        const data = d.data()
+        const lastActiveAt = data.lastActiveAt as Timestamp | undefined
+        return {
+          userId: d.id,
+          nickname: data.nickname,
+          character: data.character,
+          photoUrl: data.photoUrl ?? null,
+          lastActiveMs: lastActiveAt ? lastActiveAt.toMillis() : 0,
+        }
+      })
+      emitFiltered()
+    },
+    (err) => console.warn('관전자 목록을 불러오지 못했어요:', err.message),
+  )
 
   const intervalId = setInterval(emitFiltered, 5000)
 

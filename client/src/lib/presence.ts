@@ -44,20 +44,24 @@ export function subscribeOnlineUsers(cb: (users: OnlineUser[]) => void): () => v
     cb(cached.filter((u) => u.lastActiveMs >= cutoff).map(({ lastActiveMs: _lastActiveMs, ...rest }) => rest))
   }
 
-  const unsubscribeSnapshot = onSnapshot(collection(db, 'users'), (snap) => {
-    cached = snap.docs.map((d) => {
-      const data = d.data()
-      const lastActiveAt = data.lastActiveAt as Timestamp | undefined
-      return {
-        userId: d.id,
-        nickname: data.nickname,
-        character: data.character,
-        photoUrl: data.photoUrl ?? null,
-        lastActiveMs: lastActiveAt ? lastActiveAt.toMillis() : 0,
-      }
-    })
-    emitFiltered()
-  })
+  const unsubscribeSnapshot = onSnapshot(
+    collection(db, 'users'),
+    (snap) => {
+      cached = snap.docs.map((d) => {
+        const data = d.data()
+        const lastActiveAt = data.lastActiveAt as Timestamp | undefined
+        return {
+          userId: d.id,
+          nickname: data.nickname,
+          character: data.character,
+          photoUrl: data.photoUrl ?? null,
+          lastActiveMs: lastActiveAt ? lastActiveAt.toMillis() : 0,
+        }
+      })
+      emitFiltered()
+    },
+    (err) => console.warn('온라인 사용자 목록을 불러오지 못했어요:', err.message),
+  )
 
   const intervalId = setInterval(emitFiltered, 5000)
 

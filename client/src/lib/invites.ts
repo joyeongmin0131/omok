@@ -75,28 +75,42 @@ export async function declineInvite(inviteId: string): Promise<void> {
 // 나에게 온 대기중(pending) 초대 하나를 실시간으로 구독한다 (여러 개 와도 가장 먼저 온 것 하나만 보여줌)
 export function subscribeIncomingInvites(myId: string, cb: (invite: IncomingInvite | null) => void): () => void {
   const q = query(collection(db, 'invites'), where('toId', '==', myId))
-  return onSnapshot(q, (snap) => {
-    const pending = snap.docs
-      .map((d) => ({ id: d.id, ...(d.data() as InviteDoc) }))
-      .filter((d) => d.status === 'pending')
-      .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))[0]
+  return onSnapshot(
+    q,
+    (snap) => {
+      const pending = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as InviteDoc) }))
+        .filter((d) => d.status === 'pending')
+        .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))[0]
 
-    if (!pending) { cb(null); return }
-    cb({
-      id: pending.id,
-      fromNickname: pending.fromNickname,
-      fromCharacter: pending.fromCharacter,
-      fromPhotoUrl: pending.fromPhotoUrl,
-      roomId: pending.roomId,
-    })
-  })
+      if (!pending) { cb(null); return }
+      cb({
+        id: pending.id,
+        fromNickname: pending.fromNickname,
+        fromCharacter: pending.fromCharacter,
+        fromPhotoUrl: pending.fromPhotoUrl,
+        roomId: pending.roomId,
+      })
+    },
+    (err) => {
+      console.warn('받은 초대를 확인하지 못했어요:', err.message)
+      cb(null)
+    },
+  )
 }
 
 // 내가 보낸 초대 하나의 상태를 실시간으로 구독한다 (상대가 거절했는지 확인하는 용도)
 export function subscribeInvite(inviteId: string, cb: (invite: OutgoingInvite | null) => void): () => void {
-  return onSnapshot(doc(db, 'invites', inviteId), (snap) => {
-    if (!snap.exists()) { cb(null); return }
-    const d = snap.data() as InviteDoc
-    cb({ id: snap.id, roomId: d.roomId, status: d.status })
-  })
+  return onSnapshot(
+    doc(db, 'invites', inviteId),
+    (snap) => {
+      if (!snap.exists()) { cb(null); return }
+      const d = snap.data() as InviteDoc
+      cb({ id: snap.id, roomId: d.roomId, status: d.status })
+    },
+    (err) => {
+      console.warn('보낸 초대 상태를 확인하지 못했어요:', err.message)
+      cb(null)
+    },
+  )
 }

@@ -4,6 +4,7 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInAnonymously,
   type AuthError,
 } from 'firebase/auth'
 import { collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
@@ -42,6 +43,8 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   'auth/wrong-password': '이메일 또는 비밀번호가 올바르지 않아요.',
   'auth/user-not-found': '이메일 또는 비밀번호가 올바르지 않아요.',
   'auth/too-many-requests': '너무 여러 번 시도했어요. 잠시 후 다시 시도해 주세요.',
+  'auth/admin-restricted-operation': '게스트 로그인이 아직 꺼져있어요. Firebase 콘솔 > Authentication > 로그인 방법에서 "익명" 로그인을 켜주세요.',
+  'auth/operation-not-allowed': '게스트 로그인이 아직 꺼져있어요. Firebase 콘솔 > Authentication > 로그인 방법에서 "익명" 로그인을 켜주세요.',
 }
 
 function friendlyAuthError(err: unknown): Error {
@@ -66,6 +69,20 @@ export async function login(email: string, password: string): Promise<{ user: Us
     const snap = await getDoc(doc(db, 'users', cred.user.uid))
     if (!snap.exists()) throw new Error('사용자 정보를 찾을 수 없어요.')
     return { user: toUser(cred.user.uid, snap.data() as UserDoc) }
+  } catch (err) {
+    throw friendlyAuthError(err)
+  }
+}
+
+// 회원가입 없이 체험할 수 있는 게스트 로그인 (Firebase 익명 인증).
+// 회원가입과 똑같이 프로필 설정 화면으로 이어져서 캐릭터/닉네임을 고르게 된다.
+export async function loginAsGuest(): Promise<{ user: User }> {
+  try {
+    const cred = await signInAnonymously(auth)
+    const guestNumber = Math.floor(1000 + Math.random() * 9000)
+    const profile: UserDoc = { email: '', nickname: `게스트${guestNumber}`, character: 'bear', photoUrl: null, wins: 0, losses: 0 }
+    await setDoc(doc(db, 'users', cred.user.uid), { ...profile, createdAt: serverTimestamp(), lastActiveAt: serverTimestamp() })
+    return { user: toUser(cred.user.uid, profile) }
   } catch (err) {
     throw friendlyAuthError(err)
   }

@@ -59,6 +59,19 @@ export default function LoginScreen({ onAuthenticated }: Props) {
     }
   }
 
+  async function handleGuestLogin() {
+    setError('')
+    setLoading(true)
+    try {
+      const { user } = await api.loginAsGuest()
+      onAuthenticated(user, true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '게스트로 시작하지 못했어요.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div
       style={{
@@ -365,6 +378,38 @@ export default function LoginScreen({ onAuthenticated }: Props) {
           >
             {isRegister ? '로그인' : '회원가입'}
           </button>
+        </p>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0' }}>
+          <div style={{ flex: 1, height: 1, background: '#E0CCB0' }} />
+          <span style={{ fontSize: 12, color: '#9A7A62' }}>또는</span>
+          <div style={{ flex: 1, height: 1, background: '#E0CCB0' }} />
+        </div>
+
+        <button
+          onClick={handleGuestLogin}
+          disabled={loading}
+          style={{
+            width: '100%',
+            padding: '13px',
+            borderRadius: 12,
+            border: '1.5px solid #C9A87C',
+            background: '#FFF8EC',
+            color: '#5C3D28',
+            fontSize: 15,
+            fontWeight: 700,
+            letterSpacing: '0.2px',
+            opacity: loading ? 0.7 : 1,
+            cursor: loading ? 'default' : 'pointer',
+            transition: 'background 0.2s',
+          }}
+          onMouseEnter={(e) => { if (!loading) e.currentTarget.style.background = '#F5EDD8' }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = '#FFF8EC' }}
+        >
+          🎭 게스트로 체험하기
+        </button>
+        <p style={{ textAlign: 'center', marginTop: 8, fontSize: 11, color: '#B09070' }}>
+          가입 없이 바로 캐릭터를 고르고 시작해요
         </p>
       </div>
     </div>
