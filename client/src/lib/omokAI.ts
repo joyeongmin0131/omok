@@ -131,7 +131,7 @@ function evaluateBoard(board: Cell[][], aiColor: Cell): number {
 
 // ── Candidate generation ──────────────────────────────────────────────────────
 
-function getCandidates(board: Cell[][], limit = 20): [number, number][] {
+function getCandidates(board: Cell[][], color: Cell, limit = 20): [number, number][] {
   let hasStone = false
   const seen = new Set<number>()
   const raw: [number, number][] = []
@@ -153,13 +153,19 @@ function getCandidates(board: Cell[][], limit = 20): [number, number][] {
   }
   if (!hasStone) return [[7, 7]]
 
-  // 정적 점수로 후보 정렬, 상위 limit개만 탐색
+  const opponent: Cell = color === 'black' ? 'white' : 'black'
+
+  // 공격 점수(내가 두면 얼마나 좋은지)와 수비 점수(상대가 두면 얼마나 위협적인지)를
+  // 둘 다 계산해서 더 큰 쪽으로 후보를 정렬한다. 이렇게 해야 "상대가 다음 수에 이기는
+  // 자리"를 후보 목록에서 놓치지 않고 항상 상위권에 올려서 막을 수 있다.
   return raw
     .map(([r, c]) => {
-      board[r][c] = 'white'
-      const s = scoreCell(board, r, c, 'white')
+      board[r][c] = color
+      const attack = scoreCell(board, r, c, color)
+      board[r][c] = opponent
+      const defense = scoreCell(board, r, c, opponent)
       board[r][c] = null
-      return { pos: [r, c] as [number, number], score: s }
+      return { pos: [r, c] as [number, number], score: Math.max(attack, defense * 0.9) }
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, limit)
@@ -171,7 +177,7 @@ function getCandidates(board: Cell[][], limit = 20): [number, number][] {
 /**
  * 미니맥스 알고리즘 (알파-베타 가지치기)
  * @param board  현재 보드 상태
- * @param depth  탐색 깊이 (easy:1 / normal:2 / hard:3)
+ * @param depth  탐색 깊이 (easy:2 / normal:3 / hard:4)
  * @param alpha  알파값
  * @param beta   베타값
  * @param isMax  최대화 플레이어(AI) 차례 여부
@@ -188,7 +194,8 @@ function minimax(
   if (depth === 0) return evaluateBoard(board, aiColor)
 
   const humanColor: Cell = aiColor === 'white' ? 'black' : 'white'
-  const candidates = getCandidates(board, depth >= 3 ? 12 : 20)
+  const mover = isMax ? aiColor : humanColor
+  const candidates = getCandidates(board, mover, depth >= 3 ? 12 : 20)
   if (candidates.length === 0) return 0
 
   if (isMax) {
@@ -238,10 +245,10 @@ export async function getAiMove(
   // 보드 deep copy — 미니맥스 내부에서 in-place mutation
   const b = board.map((row) => [...row])
 
-  const depthMap: Record<Difficulty, number> = { easy: 1, normal: 2, hard: 3 }
+  const depthMap: Record<Difficulty, number> = { easy: 2, normal: 3, hard: 4 }
   const depth = depthMap[difficulty]
 
-  const candidates = getCandidates(b, depth >= 3 ? 12 : 20)
+  const candidates = getCandidates(b, aiColor, depth >= 3 ? 12 : 20)
   if (candidates.length === 0) return [7, 7]
 
   // Easy: 상위 후보 중 랜덤 (실력 약하게)

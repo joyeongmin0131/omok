@@ -318,7 +318,7 @@ export default function GameModeScreen({ user, onStartAi, onStartPvp, onBack }: 
               }}
             >
               <strong style={{ color: '#5C3D28' }}>개발자 메모:</strong> AI는 미니맥스 알고리즘(α-β 가지치기)으로 구동됩니다.
-              난이도별 탐색 깊이 — 쉬움: 1, 보통: 2, 어려움: 3.{' '}
+              난이도별 탐색 깊이 — 쉬움: 2, 보통: 3, 어려움: 4.{' '}
               <code style={{ background: '#EDE0CC', padding: '1px 4px', borderRadius: 4 }}>src/lib/omokAI.ts</code> 참고.
             </div>
 
