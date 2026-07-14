@@ -63,6 +63,12 @@ service cloud.firestore {
         && resource.data.status == 'waiting';
     }
 
+    // 누가 이 대국을 보고 있는지 (관전자 하트비트) — presence.ts의 users/lastActiveAt과 같은 방식
+    match /rooms/{roomId}/spectators/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
     match /invites/{inviteId} {
       // 보낸 사람이거나 받은 사람만 읽을 수 있다
       allow read: if isSignedIn()

@@ -62,8 +62,11 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
     }
   }, [outgoingInvite, onStartPvp])
 
+  // 지금 대국 중인 사람 ID 목록 — 이 사람들에게는 초대를 보낼 수 없다
+  const busyUserIds = new Set(activeRooms.flatMap((r) => [r.hostId, r.guestId]))
+
   async function handleInviteClick(target: OnlineUser) {
-    if (outgoingInvite || target.userId === user.id) return
+    if (outgoingInvite || target.userId === user.id || busyUserIds.has(target.userId)) return
     setInviteError('')
     try {
       const { inviteId, roomId } = await sendInvite(user, target.userId)
@@ -310,36 +313,44 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
                     온라인 {onlineUsers.length}명
                   </h3>
                 </div>
-                <p style={{ margin: '0 0 12px', fontSize: 11, color: '#9A7A62' }}>클릭하면 1:1 대전을 신청해요</p>
+                <p style={{ margin: '0 0 12px', fontSize: 11, color: '#9A7A62' }}>초대 버튼을 누르면 1:1 대전을 신청해요</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {onlineUsers.map((u) => {
                     const isMe = u.userId === user.id
+                    const isBusy = busyUserIds.has(u.userId)
+                    const inviteDisabled = isMe || isBusy || !!outgoingInvite
                     return (
-                      <button
+                      <div
                         key={u.userId}
-                        onClick={() => handleInviteClick(u)}
-                        disabled={isMe || !!outgoingInvite}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 10,
                           padding: '8px 10px', borderRadius: 10,
                           background: isMe ? 'rgba(232,93,64,0.07)' : 'transparent',
                           border: isMe ? '1px solid rgba(232,93,64,0.2)' : '1px solid transparent',
-                          cursor: isMe || outgoingInvite ? 'default' : 'pointer',
-                          opacity: !isMe && outgoingInvite ? 0.5 : 1,
-                          width: '100%', textAlign: 'left', fontFamily: "'Noto Sans KR', sans-serif",
-                          transition: 'background 0.15s',
                         }}
-                        onMouseEnter={(e) => { if (!isMe && !outgoingInvite) e.currentTarget.style.background = 'rgba(139,94,60,0.08)' }}
-                        onMouseLeave={(e) => { if (!isMe) e.currentTarget.style.background = 'transparent' }}
                       >
                         <CharacterAvatar character={u.character} photoUrl={u.photoUrl} size={30} />
                         <span style={{ flex: 1, fontSize: 13, color: isMe ? '#E85D40' : '#3D2B1F', fontWeight: isMe ? 600 : 400 }}>
                           {u.nickname}{isMe && ' (나)'}
                         </span>
-                        {!isMe && (
-                          <span style={{ fontSize: 10, color: '#8B5E3C', fontWeight: 600 }}>⚔️ 초대</span>
+                        {isMe ? null : isBusy ? (
+                          <span style={{ fontSize: 10, color: '#A16207', fontWeight: 600, padding: '4px 10px' }}>게임중</span>
+                        ) : (
+                          <button
+                            onClick={() => handleInviteClick(u)}
+                            disabled={inviteDisabled}
+                            style={{
+                              fontSize: 11, fontWeight: 700, color: inviteDisabled ? '#B09878' : '#FFF8EC',
+                              background: inviteDisabled ? '#EDE0CC' : 'linear-gradient(135deg, #E85D40, #C94C2E)',
+                              border: 'none', borderRadius: 8, padding: '6px 12px',
+                              cursor: inviteDisabled ? 'default' : 'pointer', flexShrink: 0,
+                              fontFamily: "'Noto Sans KR', sans-serif",
+                            }}
+                          >
+                            ⚔️ 초대
+                          </button>
                         )}
-                      </button>
+                      </div>
                     )
                   })}
                 </div>

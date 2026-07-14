@@ -129,8 +129,8 @@ export default function App() {
         onSpectate={handleSpectate}
       />
     )
-  if (screen === 'spectate' && spectateRoomId)
-    return <SpectateScreen roomId={spectateRoomId} onLeave={handleLeaveSpectate} />
+  if (screen === 'spectate' && user && spectateRoomId)
+    return <SpectateScreen user={user} roomId={spectateRoomId} onLeave={handleLeaveSpectate} />
   if (screen === 'gamemode' && user)
     return (
       <GameModeScreen

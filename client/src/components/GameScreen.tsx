@@ -5,6 +5,7 @@ import { CharacterAvatar, type CharacterAnimState, type CharacterId } from '../l
 import * as roomsApi from '../lib/rooms'
 import type { RoomState } from '../lib/rooms'
 import { getUserProfile } from '../lib/api'
+import { subscribeSpectators, type Spectator } from '../lib/spectators'
 
 interface Props {
   user: User
@@ -155,6 +156,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
   const [moveCount, setMoveCount] = useState(0)
   const [room, setRoom] = useState<RoomState | null>(null) // PVP 전용 — Firestore 실시간 상태
   const [nowTick, setNowTick] = useState(Date.now())
+  const [spectators, setSpectators] = useState<Spectator[]>([]) // PVP 전용 — 지금 이 대국을 보고 있는 사람들
   const aiThinking = useRef(false)
 
   const myColor: Cell = !isPvp ? 'black' : room && room.host.id === user.id ? 'black' : 'white'
@@ -203,6 +205,12 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
       }
     })
   }, [isPvp, pvpRoomId, user.id, onUserUpdate])
+
+  // 이 대국을 지켜보는 관전자 목록
+  useEffect(() => {
+    if (!isPvp || !pvpRoomId) return
+    return subscribeSpectators(pvpRoomId, setSpectators)
+  }, [isPvp, pvpRoomId])
 
   // AI 대전 타이머 (기존 로직 그대로)
   useEffect(() => {
@@ -488,6 +496,14 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
               {gameMode === 'ai' ? `AI (${aiDifficulty === 'easy' ? '쉬움' : aiDifficulty === 'normal' ? '보통' : '어려움'})` : '1:1 대전'}
             </div>
           </div>
+
+          {/* Spectator count (PVP 전용) */}
+          {isPvp && spectators.length > 0 && (
+            <div style={{ background: 'rgba(255,248,236,0.9)', borderRadius: 14, padding: '10px', border: '1px solid #E0CCB0', textAlign: 'center' }}>
+              <div style={{ fontSize: 16, marginBottom: 2 }}>👀</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#5C3D28' }}>관전자 {spectators.length}명</div>
+            </div>
+          )}
 
           {/* Undo */}
           <button

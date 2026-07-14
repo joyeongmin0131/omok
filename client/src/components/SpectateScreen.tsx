@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+import type { User } from '../App'
 import { subscribeRoom, type RoomState } from '../lib/rooms'
+import { startSpectating, stopSpectating, subscribeSpectators, type Spectator } from '../lib/spectators'
 import { CharacterAvatar } from '../lib/characters'
 import type { Cell } from '../lib/omokAI'
 
 interface Props {
+  user: User
   roomId: string
   onLeave: () => void
 }
@@ -14,11 +17,22 @@ const PAD = 24
 
 // 진행 중인 다른 사람의 대국을 그냥 지켜보기만 하는 화면.
 // GameScreen과 달리 돌을 놓거나 기권/무르기를 할 수 없다 — 방 문서를 읽기만 한다.
-export default function SpectateScreen({ roomId, onLeave }: Props) {
+export default function SpectateScreen({ user, roomId, onLeave }: Props) {
   const [room, setRoom] = useState<RoomState | null>(null)
+  const [spectators, setSpectators] = useState<Spectator[]>([])
 
   useEffect(() => {
     return subscribeRoom(roomId, setRoom)
+  }, [roomId])
+
+  // 내가 보고 있다는 걸 다른 사람들도 알 수 있게 하트비트를 보낸다
+  useEffect(() => {
+    startSpectating(roomId, user)
+    return () => stopSpectating(roomId, user.id)
+  }, [roomId, user])
+
+  useEffect(() => {
+    return subscribeSpectators(roomId, setSpectators)
   }, [roomId])
 
   const boardPx = CELL * (SIZE - 1) + PAD * 2
@@ -40,7 +54,7 @@ export default function SpectateScreen({ roomId, onLeave }: Props) {
           ← 로비로 돌아가기
         </button>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#A16207', background: 'rgba(245,168,48,0.15)', padding: '4px 12px', borderRadius: 20 }}>
-          👀 관전 중
+          👀 관전 중 · 관전자 {spectators.length}명
         </span>
       </div>
 

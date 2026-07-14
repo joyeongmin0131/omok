@@ -287,18 +287,26 @@ export interface ActiveRoomSummary {
   id: string
   title: string
   host: string
+  hostId: string
   guest: string
+  guestId: string
   moveCount: number
 }
 
-// 로비 화면의 "진행 중인 게임" 목록
+// 로비 화면의 "진행 중인 게임" 목록. hostId/guestId를 같이 내려줘서 "이 사람 지금 게임 중인지"를
+// (예: 초대 버튼 비활성화) 판단할 수 있게 한다.
 export function subscribeActiveRooms(cb: (rooms: ActiveRoomSummary[]) => void): () => void {
   const q = query(collection(db, 'rooms'), where('status', '==', 'playing'))
   return onSnapshot(q, (snap) => {
     cb(
       snap.docs.map((d) => {
         const data = d.data() as RoomDoc
-        return { id: d.id, title: data.title, host: data.hostNickname, guest: data.guestNickname ?? '', moveCount: data.moveCount }
+        return {
+          id: d.id, title: data.title,
+          host: data.hostNickname, hostId: data.hostId,
+          guest: data.guestNickname ?? '', guestId: data.guestId ?? '',
+          moveCount: data.moveCount,
+        }
       }),
     )
   })
