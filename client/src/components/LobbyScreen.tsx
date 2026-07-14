@@ -33,6 +33,7 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
   const [outgoingInvite, setOutgoingInvite] = useState<{ inviteId: string; roomId: string; toNickname: string } | null>(null)
   const [incomingInvite, setIncomingInvite] = useState<IncomingInvite | null>(null)
   const [inviteError, setInviteError] = useState('')
+  const [adminError, setAdminError] = useState('')
 
   const admin = isAdmin(user.email)
 
@@ -48,13 +49,31 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
   }, [])
 
   async function handleAdminStop(roomId: string) {
-    if (!window.confirm('이 게임을 강제로 종료할까요?')) return
-    await adminDeleteRoom(roomId)
+    if (!window.confirm('이 게임을 강제로 종료할까요? 종료하면 아무도 관전할 수 없어요.')) return
+    setAdminError('')
+    try {
+      await adminDeleteRoom(roomId)
+    } catch (err) {
+      setAdminError(
+        err instanceof Error
+          ? `게임을 중단하지 못했어요: ${err.message} (firestore.rules를 재배포했는지 확인해 주세요)`
+          : '게임을 중단하지 못했어요.',
+      )
+    }
   }
 
   async function handleAdminDeleteWaiting(roomId: string) {
     if (!window.confirm('이 대기방을 삭제할까요?')) return
-    await adminDeleteRoom(roomId)
+    setAdminError('')
+    try {
+      await adminDeleteRoom(roomId)
+    } catch (err) {
+      setAdminError(
+        err instanceof Error
+          ? `방을 삭제하지 못했어요: ${err.message} (firestore.rules를 재배포했는지 확인해 주세요)`
+          : '방을 삭제하지 못했어요.',
+      )
+    }
   }
 
   // 나에게 온 1:1 초대를 항상 지켜본다
@@ -283,6 +302,11 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
                 <h3 style={{ fontFamily: "'Noto Serif KR', serif", fontSize: 17, fontWeight: 700, color: '#3D2B1F', margin: '0 0 14px' }}>
                   진행 중인 게임 {activeRooms.length > 0 && `(${activeRooms.length})`}
                 </h3>
+                {admin && adminError && (
+                  <p style={{ fontSize: 12, color: '#C0401F', margin: '0 0 10px', background: 'rgba(232,93,64,0.08)', padding: '8px 12px', borderRadius: 8 }}>
+                    {adminError}
+                  </p>
+                )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {activeRooms.length === 0 && (
                     <p style={{ fontSize: 13, color: '#9A7A62', margin: 0 }}>지금은 진행 중인 1:1 대국이 없어요.</p>
@@ -347,6 +371,11 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
                   <h3 style={{ fontFamily: "'Noto Serif KR', serif", fontSize: 17, fontWeight: 700, color: '#3D2B1F', margin: '0 0 14px' }}>
                     🛡️ 대기 중인 방 (관리자) {openRooms.length > 0 && `(${openRooms.length})`}
                   </h3>
+                  {adminError && (
+                    <p style={{ fontSize: 12, color: '#C0401F', margin: '0 0 10px', background: 'rgba(232,93,64,0.08)', padding: '8px 12px', borderRadius: 8 }}>
+                      {adminError}
+                    </p>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {openRooms.length === 0 && (
                       <p style={{ fontSize: 13, color: '#9A7A62', margin: 0 }}>대기 중인 방이 없어요.</p>
