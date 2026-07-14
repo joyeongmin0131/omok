@@ -208,6 +208,9 @@ function findImmediateWin(board: Cell[][], candidates: [number, number][], color
  * @param difficulty 난이도 ('easy' | 'normal' | 'hard')
  * @returns          [row, col] 착수 위치
  */
+// 쉬움 난이도는 상대의 승리 위협을 이 확률로만 막는다 (나머지는 못 본 척 넘어감 → 훨씬 쉬움)
+const EASY_BLOCK_CHANCE = 0.25
+
 export async function getAiMove(
   board: Cell[][],
   aiColor: Cell,
@@ -219,18 +222,20 @@ export async function getAiMove(
   const candidates = getCandidates(b, aiColor, 24)
   if (candidates.length === 0) return [7, 7]
 
-  // 1. 내가 지금 이길 수 있으면 무조건 이긴다
+  // 1. 내가 지금 이길 수 있으면 무조건 이긴다 (모든 난이도 공통)
   const winMove = findImmediateWin(b, candidates, aiColor)
   if (winMove) return winMove
 
-  // 2. 상대가 다음 수에 이길 수 있으면 반드시 막는다 (모든 난이도 공통 — 이걸 안 하면 AI가 어처구니없이 짐)
-  const blockMove = findImmediateWin(b, candidates, humanColor)
-  if (blockMove) return blockMove
+  // 2. 상대가 다음 수에 이길 수 있으면 막는다 — 쉬움은 가끔 놓치고, 보통/어려움은 항상 막는다
+  const shouldCheckBlock = difficulty !== 'easy' || Math.random() < EASY_BLOCK_CHANCE
+  if (shouldCheckBlock) {
+    const blockMove = findImmediateWin(b, candidates, humanColor)
+    if (blockMove) return blockMove
+  }
 
-  // 3. 쉬움: 점수 상위 후보 중에서 무작위로 선택 (일부러 최적수를 안 고름)
+  // 3. 쉬움: 전략을 거의 안 보고 후보 중 완전히 무작위로 선택 (아주 약하게)
   if (difficulty === 'easy') {
-    const pool = candidates.slice(0, 6)
-    return pool[Math.floor(Math.random() * pool.length)]
+    return candidates[Math.floor(Math.random() * candidates.length)]
   }
 
   // 4. 보통: 지금 당장 공격+수비 점수가 가장 높은 자리에 둔다 (앞을 내다보지 않는 1수 판단)
@@ -238,29 +243,38 @@ export async function getAiMove(
     return candidates[0]
   }
 
-  // 5. 어려움: 유력한 후보 몇 개에 대해 "내가 여기 두면 상대는 최선으로 어떻게 응수할까"를
-  //    한 수만 더 내다본다. 재귀 없이 이중 for문으로 충분히 구현된다.
+  // 5. 어려움: "나 → 상대 최선 응수 → 나의 최선 응수"까지 세 수를 내다본다.
+  //    재귀 대신 for문 3겹으로 구현해서 depth/alpha/beta 없이도 그대로 읽힌다.
   let bestMove = candidates[0]
   let bestWorstCase = -Infinity
 
-  for (const [r, c] of candidates.slice(0, 8)) {
-    b[r][c] = aiColor
+  for (const [r1, c1] of candidates.slice(0, 10)) {
+    b[r1][c1] = aiColor
     const opponentReplies = getCandidates(b, humanColor, 8)
 
-    // 상대가 둘 수 있는 응수들 중 나에게 가장 불리한(=상대에게 가장 좋은) 경우를 찾는다
+    // 상대가 둘 수 있는 응수들 중 "내가 그다음에 최선으로 대응해도" 나에게 가장 불리한 경우를 찾는다
     let worstForMe = Infinity
-    for (const [rr, rc] of opponentReplies) {
-      b[rr][rc] = humanColor
-      worstForMe = Math.min(worstForMe, evaluateBoard(b, aiColor))
-      b[rr][rc] = null
+    for (const [r2, c2] of opponentReplies) {
+      b[r2][c2] = humanColor
+      const myFollowUps = getCandidates(b, aiColor, 6)
+
+      let bestFollowUp = -Infinity
+      for (const [r3, c3] of myFollowUps) {
+        b[r3][c3] = aiColor
+        bestFollowUp = Math.max(bestFollowUp, evaluateBoard(b, aiColor))
+        b[r3][c3] = null
+      }
+
+      worstForMe = Math.min(worstForMe, bestFollowUp)
+      b[r2][c2] = null
     }
 
-    b[r][c] = null
+    b[r1][c1] = null
 
-    // 그 "최악의 경우"가 그나마 가장 나은 후보를 고른다 (상대가 최선을 다해도 내가 제일 유리한 수)
+    // 상대가 최선을 다해도 그나마(=결국) 내가 가장 유리해지는 첫 수를 고른다
     if (worstForMe > bestWorstCase) {
       bestWorstCase = worstForMe
-      bestMove = [r, c]
+      bestMove = [r1, c1]
     }
   }
 

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { User } from '../App'
 import * as api from '../lib/api'
 import { CHARACTERS, CharacterAvatar, type CharacterId } from '../lib/characters'
@@ -6,9 +6,13 @@ import { CHARACTERS, CharacterAvatar, type CharacterId } from '../lib/characters
 interface Props {
   user: User
   onComplete: (user: User) => void
+  // 있으면 "프로필 수정" 모드로 취급 (취소 버튼이 나타나고, 완료 버튼 문구가 바뀜)
+  onCancel?: () => void
 }
 
-export default function ProfileSetupScreen({ user, onComplete }: Props) {
+export default function ProfileSetupScreen({ user, onComplete, onCancel }: Props) {
+  const isEdit = !!onCancel
+
   const [selected, setSelected] = useState<CharacterId>((user.character as CharacterId) ?? 'bear')
   const [nickname, setNickname] = useState(user.nickname)
   const [photoFile, setPhotoFile] = useState<File | null>(null)
@@ -16,13 +20,69 @@ export default function ProfileSetupScreen({ user, onComplete }: Props) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const [cameraOpen, setCameraOpen] = useState(false)
+  const [cameraError, setCameraError] = useState('')
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
+
   const selectedChar = CHARACTERS.find((c) => c.id === selected)!
+
+  // 컴포넌트가 사라질 때 카메라가 켜져 있었다면 꺼준다
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+    }
+  }, [])
+
+  useEffect(() => {
+    if (cameraOpen && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current
+    }
+  }, [cameraOpen])
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setPhotoFile(file)
     setPhotoPreview(URL.createObjectURL(file))
+  }
+
+  async function openCamera() {
+    setCameraError('')
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      streamRef.current = stream
+      setCameraOpen(true)
+    } catch {
+      setCameraError('카메라를 사용할 수 없어요. 브라우저에서 카메라 권한을 허용했는지 확인해 주세요.')
+    }
+  }
+
+  function closeCamera() {
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    setCameraOpen(false)
+  }
+
+  function capturePhoto() {
+    const video = videoRef.current
+    if (!video || !video.videoWidth) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    // 미리보기와 똑같이 좌우 반전해서 찍는다 (셀카 느낌 그대로 저장)
+    ctx.translate(canvas.width, 0)
+    ctx.scale(-1, 1)
+    ctx.drawImage(video, 0, 0)
+    canvas.toBlob((blob) => {
+      if (!blob) return
+      const file = new File([blob], 'camera-photo.jpg', { type: 'image/jpeg' })
+      setPhotoFile(file)
+      setPhotoPreview(URL.createObjectURL(file))
+      closeCamera()
+    }, 'image/jpeg', 0.9)
   }
 
   async function handleComplete() {
@@ -121,21 +181,22 @@ export default function ProfileSetupScreen({ user, onComplete }: Props) {
           zIndex: 1,
         }}
       >
-        {/* Step indicator */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 28 }}>
-          {[1, 2].map((step) => (
-            <div
-              key={step}
-              style={{
-                width: step === 2 ? 28 : 10,
-                height: 10,
-                borderRadius: 5,
-                background: step === 2 ? '#E85D40' : '#D4B896',
-                transition: 'width 0.3s',
-              }}
-            />
-          ))}
-        </div>
+        {!isEdit && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 28 }}>
+            {[1, 2].map((step) => (
+              <div
+                key={step}
+                style={{
+                  width: step === 2 ? 28 : 10,
+                  height: 10,
+                  borderRadius: 5,
+                  background: step === 2 ? '#E85D40' : '#D4B896',
+                  transition: 'width 0.3s',
+                }}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Heading */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
@@ -148,10 +209,10 @@ export default function ProfileSetupScreen({ user, onComplete }: Props) {
               margin: '0 0 8px',
             }}
           >
-            캐릭터를 선택해보장 🐾
+            {isEdit ? '프로필 수정 ✏️' : '캐릭터를 선택해보장 🐾'}
           </h2>
           <p style={{ fontSize: 14, color: '#9A7A62', margin: 0 }}>
-            오목판에서 나를 대표할 친구를 골라보세요!
+            {isEdit ? '캐릭터, 사진, 닉네임을 언제든 바꿀 수 있어요' : '오목판에서 나를 대표할 친구를 골라보세요!'}
           </p>
         </div>
 
@@ -250,26 +311,48 @@ export default function ProfileSetupScreen({ user, onComplete }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
           <CharacterAvatar character={selected} photoUrl={photoPreview} size={64} />
           <div style={{ flex: 1 }}>
-            <label
-              htmlFor="photo-input"
-              style={{
-                display: 'inline-block',
-                padding: '9px 16px',
-                borderRadius: 10,
-                border: '1.5px solid #C9A87C',
-                background: '#FFF8EC',
-                color: '#5C3D28',
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              📷 {photoPreview ? '사진 변경' : '얼굴 사진 올리기'}
-            </label>
-            <input id="photo-input" type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: 'none' }} />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <label
+                htmlFor="photo-input"
+                style={{
+                  display: 'inline-block',
+                  padding: '9px 14px',
+                  borderRadius: 10,
+                  border: '1.5px solid #C9A87C',
+                  background: '#FFF8EC',
+                  color: '#5C3D28',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                📁 {photoPreview ? '사진 변경' : '사진 올리기'}
+              </label>
+              <input id="photo-input" type="file" accept="image/*" onChange={handlePhotoChange} style={{ display: 'none' }} />
+
+              <button
+                type="button"
+                onClick={openCamera}
+                style={{
+                  padding: '9px 14px',
+                  borderRadius: 10,
+                  border: '1.5px solid #C9A87C',
+                  background: '#FFF8EC',
+                  color: '#5C3D28',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                📸 카메라로 촬영
+              </button>
+            </div>
             <p style={{ fontSize: 11, color: '#9A7A62', margin: '6px 0 0' }}>
               올린 사진은 캐릭터 얼굴 자리에 동그랗게 나타나요 (선택사항)
             </p>
+            {cameraError && (
+              <p style={{ fontSize: 11, color: '#C0401F', margin: '4px 0 0' }}>{cameraError}</p>
+            )}
           </div>
         </div>
 
@@ -336,33 +419,92 @@ export default function ProfileSetupScreen({ user, onComplete }: Props) {
           </div>
         </div>
 
-        {/* Complete button */}
-        <button
-          onClick={handleComplete}
-          disabled={loading}
+        {/* Complete / Cancel buttons */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+          {isEdit && (
+            <button
+              onClick={onCancel}
+              disabled={loading}
+              style={{
+                flex: 1,
+                padding: '14px',
+                borderRadius: 14,
+                border: 'none',
+                background: '#EDE0CC',
+                color: '#5C3D28',
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: loading ? 'default' : 'pointer',
+              }}
+            >
+              취소
+            </button>
+          )}
+          <button
+            onClick={handleComplete}
+            disabled={loading}
+            style={{
+              flex: isEdit ? 1 : undefined,
+              width: isEdit ? undefined : '100%',
+              padding: '14px',
+              borderRadius: 14,
+              border: 'none',
+              background:
+                nickname.trim().length >= 2 && !loading
+                  ? 'linear-gradient(135deg, #E85D40, #C94C2E)'
+                  : '#D4B896',
+              color: nickname.trim().length >= 2 && !loading ? '#FFF8EC' : '#9A7A62',
+              fontSize: 16,
+              fontWeight: 700,
+              letterSpacing: '0.3px',
+              boxShadow:
+                nickname.trim().length >= 2 && !loading ? '0 4px 16px rgba(232,93,64,0.35)' : 'none',
+              transition: 'all 0.2s',
+              cursor: nickname.trim().length >= 2 && !loading ? 'pointer' : 'not-allowed',
+            }}
+          >
+            {loading ? '저장 중...' : isEdit ? '저장하기' : '오목판으로 출발! 🎮'}
+          </button>
+        </div>
+      </div>
+
+      {/* 카메라 촬영 모달 */}
+      {cameraOpen && (
+        <div
           style={{
-            marginTop: 20,
-            width: '100%',
-            padding: '14px',
-            borderRadius: 14,
-            border: 'none',
-            background:
-              nickname.trim().length >= 2 && !loading
-                ? 'linear-gradient(135deg, #E85D40, #C94C2E)'
-                : '#D4B896',
-            color: nickname.trim().length >= 2 && !loading ? '#FFF8EC' : '#9A7A62',
-            fontSize: 16,
-            fontWeight: 700,
-            letterSpacing: '0.3px',
-            boxShadow:
-              nickname.trim().length >= 2 && !loading ? '0 4px 16px rgba(232,93,64,0.35)' : 'none',
-            transition: 'all 0.2s',
-            cursor: nickname.trim().length >= 2 && !loading ? 'pointer' : 'not-allowed',
+            position: 'fixed', inset: 0, background: 'rgba(61,43,31,0.7)',
+            backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', zIndex: 200, padding: 24,
           }}
         >
-          {loading ? '저장 중...' : '오목판으로 출발! 🎮'}
-        </button>
-      </div>
+          <div style={{ background: '#FFF8EC', borderRadius: 20, padding: 24, maxWidth: 380, width: '100%' }}>
+            <h3 style={{ margin: '0 0 12px', fontFamily: "'Noto Serif KR', serif", fontSize: 18, fontWeight: 800, color: '#3D2B1F', textAlign: 'center' }}>
+              사진 촬영
+            </h3>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ width: '100%', borderRadius: 12, background: '#000', transform: 'scaleX(-1)', display: 'block' }}
+            />
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button
+                onClick={closeCamera}
+                style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: '#EDE0CC', color: '#5C3D28', fontWeight: 700, cursor: 'pointer' }}
+              >
+                취소
+              </button>
+              <button
+                onClick={capturePhoto}
+                style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#E85D40,#C94C2E)', color: '#FFF8EC', fontWeight: 700, cursor: 'pointer' }}
+              >
+                📸 촬영
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -62,5 +62,26 @@ service cloud.firestore {
         && resource.data.hostId == request.auth.uid
         && resource.data.status == 'waiting';
     }
+
+    match /invites/{inviteId} {
+      // 보낸 사람이거나 받은 사람만 읽을 수 있다
+      allow read: if isSignedIn()
+        && (resource.data.fromId == request.auth.uid || resource.data.toId == request.auth.uid);
+
+      // 초대 생성 — 자기 자신을 fromId로 등록하는 새 초대만
+      allow create: if isSignedIn()
+        && request.resource.data.fromId == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      // 상태 변경 — 받은 사람은 수락/거절만, 보낸 사람은 취소만 할 수 있다
+      allow update: if isSignedIn() && (
+        (resource.data.toId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status in ['accepted', 'declined']) ||
+        (resource.data.fromId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && request.resource.data.status == 'cancelled')
+      );
+    }
   }
 }

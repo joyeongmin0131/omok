@@ -5,11 +5,12 @@ import ProfileSetupScreen from './components/ProfileSetupScreen'
 import LobbyScreen from './components/LobbyScreen'
 import GameModeScreen from './components/GameModeScreen'
 import GameScreen from './components/GameScreen'
+import SpectateScreen from './components/SpectateScreen'
 import { auth } from './lib/firebase'
 import { getUserProfile } from './lib/api'
 import { startPresenceHeartbeat, stopPresenceHeartbeat } from './lib/presence'
 
-export type Screen = 'login' | 'profile' | 'lobby' | 'gamemode' | 'game'
+export type Screen = 'login' | 'profile' | 'lobby' | 'gamemode' | 'game' | 'spectate'
 export type GameMode = 'pvp' | 'ai'
 export type AIDifficulty = 'easy' | 'normal' | 'hard'
 
@@ -30,6 +31,9 @@ export default function App() {
   const [gameMode, setGameMode] = useState<GameMode>('ai')
   const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>('normal')
   const [pvpRoomId, setPvpRoomId] = useState<string | null>(null)
+  const [spectateRoomId, setSpectateRoomId] = useState<string | null>(null)
+  // 'profile' 화면이 최초 가입 설정인지, 로비에서 다시 들어온 수정 화면인지 구분
+  const [profileEditMode, setProfileEditMode] = useState(false)
 
   // Firebase가 기억해둔 로그인 상태를 복원한다 (새로고침해도 로그아웃되지 않도록)
   useEffect(() => {
@@ -50,7 +54,13 @@ export default function App() {
   function handleAuthenticated(u: User, isNewAccount: boolean) {
     setUser(u)
     startPresenceHeartbeat(u.id)
+    setProfileEditMode(false)
     setScreen(isNewAccount ? 'profile' : 'lobby')
+  }
+
+  function handleEditProfile() {
+    setProfileEditMode(true)
+    setScreen('profile')
   }
 
   function handleProfileComplete(u: User) {
@@ -75,6 +85,16 @@ export default function App() {
     setScreen('lobby')
   }
 
+  function handleSpectate(roomId: string) {
+    setSpectateRoomId(roomId)
+    setScreen('spectate')
+  }
+
+  function handleLeaveSpectate() {
+    setSpectateRoomId(null)
+    setScreen('lobby')
+  }
+
   async function handleLogout() {
     stopPresenceHeartbeat()
     await signOut(auth)
@@ -90,9 +110,27 @@ export default function App() {
   if (checkingSession) return null
 
   if (screen === 'login') return <LoginScreen onAuthenticated={handleAuthenticated} />
-  if (screen === 'profile' && user) return <ProfileSetupScreen user={user} onComplete={handleProfileComplete} />
+  if (screen === 'profile' && user)
+    return (
+      <ProfileSetupScreen
+        user={user}
+        onComplete={handleProfileComplete}
+        onCancel={profileEditMode ? () => setScreen('lobby') : undefined}
+      />
+    )
   if (screen === 'lobby' && user)
-    return <LobbyScreen user={user} onStartGame={() => setScreen('gamemode')} onLogout={handleLogout} />
+    return (
+      <LobbyScreen
+        user={user}
+        onStartGame={() => setScreen('gamemode')}
+        onLogout={handleLogout}
+        onEditProfile={handleEditProfile}
+        onStartPvp={handleStartPvp}
+        onSpectate={handleSpectate}
+      />
+    )
+  if (screen === 'spectate' && spectateRoomId)
+    return <SpectateScreen roomId={spectateRoomId} onLeave={handleLeaveSpectate} />
   if (screen === 'gamemode' && user)
     return (
       <GameModeScreen
