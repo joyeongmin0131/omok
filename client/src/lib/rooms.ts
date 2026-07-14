@@ -127,6 +127,12 @@ export async function cancelRoom(roomId: string): Promise<void> {
   await deleteDoc(doc(db, 'rooms', roomId))
 }
 
+// 관리자가 방을 강제로 삭제한다 — 대기 중인 빈 방 정리, 또는 진행 중인 게임 강제 종료 둘 다 이걸로 처리한다.
+// (실제 관리자인지는 firestore.rules에서 최종적으로 검사한다)
+export async function adminDeleteRoom(roomId: string): Promise<void> {
+  await deleteDoc(doc(db, 'rooms', roomId))
+}
+
 // 방 입장 — 들어가는 사람은 항상 백돌(white). 트랜잭션으로 "이미 다른 사람이 들어간 방에
 // 동시에 들어가는" 경쟁 상황을 막는다.
 export async function joinRoom(roomId: string, guest: User): Promise<void> {

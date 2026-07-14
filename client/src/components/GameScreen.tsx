@@ -155,6 +155,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
   const [resultWin, setResultWin] = useState(false)
   const [moveCount, setMoveCount] = useState(0)
   const [room, setRoom] = useState<RoomState | null>(null) // PVP 전용 — Firestore 실시간 상태
+  const [roomDeleted, setRoomDeleted] = useState(false) // 관리자가 방을 강제로 지운 경우
   const [nowTick, setNowTick] = useState(Date.now())
   const [spectators, setSpectators] = useState<Spectator[]>([]) // PVP 전용 — 지금 이 대국을 보고 있는 사람들
   const aiThinking = useRef(false)
@@ -180,8 +181,11 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
   useEffect(() => {
     if (!isPvp || !pvpRoomId) return
     return roomsApi.subscribeRoom(pvpRoomId, (r) => {
+      if (!r) {
+        setRoomDeleted(true)
+        return
+      }
       setRoom(r)
-      if (!r) return
       setBoard(r.board)
       setTurn(r.turn)
       setLastMove(r.lastMove)
@@ -358,6 +362,20 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
 
   const isWinCell = (r: number, c: number) => winLine.some(([wr, wc]) => wr === r && wc === c)
   const boardPx = CELL * (SIZE - 1) + PAD * 2
+
+  if (isPvp && roomDeleted) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', justifyContent: 'center', background: '#F5EDD8', fontFamily: "'Noto Sans KR', sans-serif" }}>
+        <p style={{ color: '#5C3D28', fontSize: 16, fontWeight: 700 }}>🛑 관리자에 의해 게임이 종료됐어요</p>
+        <button
+          onClick={onLeave}
+          style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#E85D40,#C94C2E)', color: '#FFF8EC', fontWeight: 700, cursor: 'pointer' }}
+        >
+          로비로 돌아가기
+        </button>
+      </div>
+    )
+  }
 
   if (isPvp && !room) {
     return (

@@ -3,11 +3,15 @@ import type { User } from '../App'
 import RankingTab from './RankingTab'
 import { CharacterAvatar } from '../lib/characters'
 import { subscribeOnlineUsers, type OnlineUser } from '../lib/presence'
-import { subscribeActiveRooms, type ActiveRoomSummary, subscribeRoom } from '../lib/rooms'
+import {
+  subscribeActiveRooms, type ActiveRoomSummary, subscribeRoom, cancelRoom,
+  subscribeOpenRooms, type OpenRoomSummary, adminDeleteRoom,
+} from '../lib/rooms'
 import {
   sendInvite, cancelInvite, acceptInvite, declineInvite,
   subscribeIncomingInvites, subscribeInvite, type IncomingInvite,
 } from '../lib/invites'
+import { isAdmin } from '../lib/admin'
 
 interface Props {
   user: User
@@ -24,19 +28,34 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
   const [tab, setTab] = useState<Tab>('lobby')
   const [onlineUsers, setOnlineUsers] = useState<OnlineUser[]>([])
   const [activeRooms, setActiveRooms] = useState<ActiveRoomSummary[]>([])
+  const [openRooms, setOpenRooms] = useState<OpenRoomSummary[]>([])
 
   const [outgoingInvite, setOutgoingInvite] = useState<{ inviteId: string; roomId: string; toNickname: string } | null>(null)
   const [incomingInvite, setIncomingInvite] = useState<IncomingInvite | null>(null)
   const [inviteError, setInviteError] = useState('')
 
+  const admin = isAdmin(user.email)
+
   useEffect(() => {
     const unsubUsers = subscribeOnlineUsers(setOnlineUsers)
     const unsubRooms = subscribeActiveRooms(setActiveRooms)
+    const unsubOpenRooms = subscribeOpenRooms(setOpenRooms)
     return () => {
       unsubUsers()
       unsubRooms()
+      unsubOpenRooms()
     }
   }, [])
+
+  async function handleAdminStop(roomId: string) {
+    if (!window.confirm('이 게임을 강제로 종료할까요?')) return
+    await adminDeleteRoom(roomId)
+  }
+
+  async function handleAdminDeleteWaiting(roomId: string) {
+    if (!window.confirm('이 대기방을 삭제할까요?')) return
+    await adminDeleteRoom(roomId)
+  }
 
   // 나에게 온 1:1 초대를 항상 지켜본다
   useEffect(() => {
@@ -44,21 +63,32 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
   }, [user.id])
 
   // 내가 보낸 초대: 상대가 입장하면(방이 playing으로 바뀌면) 바로 게임 화면으로,
-  // 상대가 거절하면 안내 메시지를 띄운다
+  // 상대가 거절하면 방을 정리하고 안내 메시지를 띄운다.
+  // 5초 안에 아무 응답이 없어도 마찬가지로 초대를 취소하고 방을 지운다.
   useEffect(() => {
     if (!outgoingInvite) return
-    const unsubRoom = subscribeRoom(outgoingInvite.roomId, (room) => {
-      if (room?.status === 'playing') onStartPvp(outgoingInvite.roomId)
+    const { inviteId, roomId, toNickname } = outgoingInvite
+
+    const unsubRoom = subscribeRoom(roomId, (room) => {
+      if (room?.status === 'playing') onStartPvp(roomId)
     })
-    const unsubInvite = subscribeInvite(outgoingInvite.inviteId, (invite) => {
+    const unsubInvite = subscribeInvite(inviteId, (invite) => {
       if (invite?.status === 'declined') {
-        setInviteError(`${outgoingInvite.toNickname}님이 초대를 거절했어요.`)
+        setInviteError(`${toNickname}님이 초대를 거절했어요.`)
+        cancelRoom(roomId).catch(() => {})
         setOutgoingInvite(null)
       }
     })
+    const timeoutId = setTimeout(() => {
+      setInviteError(`${toNickname}님이 응답하지 않았어요.`)
+      cancelInvite(inviteId, roomId).catch(() => {})
+      setOutgoingInvite(null)
+    }, 5000)
+
     return () => {
       unsubRoom()
       unsubInvite()
+      clearTimeout(timeoutId)
     }
   }, [outgoingInvite, onStartPvp])
 
@@ -258,9 +288,8 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
                     <p style={{ fontSize: 13, color: '#9A7A62', margin: 0 }}>지금은 진행 중인 1:1 대국이 없어요.</p>
                   )}
                   {activeRooms.map((room) => (
-                    <button
+                    <div
                       key={room.id}
-                      onClick={() => onSpectate(room.id)}
                       style={{
                         background: '#FFF8EC',
                         borderRadius: 14,
@@ -269,13 +298,10 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        width: '100%', textAlign: 'left', cursor: 'pointer',
-                        fontFamily: "'Noto Sans KR', sans-serif", transition: 'all 0.15s',
+                        gap: 10,
                       }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#C9A87C'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E0CCB0'; e.currentTarget.style.transform = 'translateY(0)' }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                         <span style={{ fontSize: 20 }}>⚫</span>
                         <div>
                           <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: '#3D2B1F' }}>
@@ -286,13 +312,72 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
                           </p>
                         </div>
                       </div>
-                      <span style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'rgba(245,168,48,0.15)', color: '#A16207', flexShrink: 0 }}>
-                        👀 관전하기
-                      </span>
-                    </button>
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        {admin && (
+                          <button
+                            onClick={() => handleAdminStop(room.id)}
+                            style={{
+                              padding: '6px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                              background: 'rgba(232,93,64,0.12)', color: '#C0401F', border: '1px solid rgba(232,93,64,0.3)', cursor: 'pointer',
+                              fontFamily: "'Noto Sans KR', sans-serif",
+                            }}
+                          >
+                            🛑 중단
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onSpectate(room.id)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                            background: 'rgba(245,168,48,0.15)', color: '#A16207', border: 'none', cursor: 'pointer',
+                            fontFamily: "'Noto Sans KR', sans-serif",
+                          }}
+                        >
+                          👀 관전하기
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
+
+              {/* 관리자 전용: 대기 중인 방 */}
+              {admin && (
+                <div style={{ marginTop: 24 }}>
+                  <h3 style={{ fontFamily: "'Noto Serif KR', serif", fontSize: 17, fontWeight: 700, color: '#3D2B1F', margin: '0 0 14px' }}>
+                    🛡️ 대기 중인 방 (관리자) {openRooms.length > 0 && `(${openRooms.length})`}
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {openRooms.length === 0 && (
+                      <p style={{ fontSize: 13, color: '#9A7A62', margin: 0 }}>대기 중인 방이 없어요.</p>
+                    )}
+                    {openRooms.map((room) => (
+                      <div
+                        key={room.id}
+                        style={{
+                          background: '#FFF8EC', borderRadius: 14, padding: '12px 18px', border: '1.5px solid #E0CCB0',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: '#3D2B1F' }}>{room.title}</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 11, color: '#9A7A62' }}>{room.host}님이 대기 중</p>
+                        </div>
+                        <button
+                          onClick={() => handleAdminDeleteWaiting(room.id)}
+                          style={{
+                            padding: '6px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                            background: 'rgba(232,93,64,0.12)', color: '#C0401F', border: '1px solid rgba(232,93,64,0.3)', cursor: 'pointer',
+                            flexShrink: 0, fontFamily: "'Noto Sans KR', sans-serif",
+                          }}
+                        >
+                          🗑 삭제
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right: online users */}

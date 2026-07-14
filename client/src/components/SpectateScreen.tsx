@@ -19,10 +19,17 @@ const PAD = 24
 // GameScreen과 달리 돌을 놓거나 기권/무르기를 할 수 없다 — 방 문서를 읽기만 한다.
 export default function SpectateScreen({ user, roomId, onLeave }: Props) {
   const [room, setRoom] = useState<RoomState | null>(null)
+  const [roomDeleted, setRoomDeleted] = useState(false)
   const [spectators, setSpectators] = useState<Spectator[]>([])
 
   useEffect(() => {
-    return subscribeRoom(roomId, setRoom)
+    return subscribeRoom(roomId, (r) => {
+      if (!r) {
+        setRoomDeleted(true)
+        return
+      }
+      setRoom(r)
+    })
   }, [roomId])
 
   // 내가 보고 있다는 걸 다른 사람들도 알 수 있게 하트비트를 보낸다
@@ -36,6 +43,20 @@ export default function SpectateScreen({ user, roomId, onLeave }: Props) {
   }, [roomId])
 
   const boardPx = CELL * (SIZE - 1) + PAD * 2
+
+  if (roomDeleted) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', justifyContent: 'center', background: '#F5EDD8', fontFamily: "'Noto Sans KR', sans-serif" }}>
+        <p style={{ color: '#5C3D28', fontSize: 16, fontWeight: 700 }}>이 게임은 종료됐어요</p>
+        <button
+          onClick={onLeave}
+          style={{ padding: '10px 22px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg,#E85D40,#C94C2E)', color: '#FFF8EC', fontWeight: 700, cursor: 'pointer' }}
+        >
+          로비로 돌아가기
+        </button>
+      </div>
+    )
+  }
 
   if (!room) {
     return (

@@ -16,6 +16,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // 이 이메일로 로그인한 사람은 관리자 — 진행 중인 게임 강제 종료, 대기 중인 방 삭제 가능
+    // (client/src/lib/admin.ts와 똑같은 목록을 유지해야 한다)
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email in [
+        'zlzmsrlfls08@gmail.com',
+        'aaaaaangaa@gmail.com',
+        'kal571074@gmail.com',
+        'sineunju414@gmail.com',
+        'seohyun4452@naver.com'
+      ];
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn();
 
@@ -57,10 +69,12 @@ service cloud.firestore {
         (resource.data.guestId == null && request.resource.data.guestId == request.auth.uid)
       );
 
-      // 방 삭제 — 아직 아무도 안 들어온 대기방을, 만든 사람이 취소할 때만
-      allow delete: if isSignedIn()
-        && resource.data.hostId == request.auth.uid
-        && resource.data.status == 'waiting';
+      // 방 삭제 — 아직 아무도 안 들어온 대기방을 만든 사람이 취소할 때, 또는 관리자가
+      // 아무 방(대기 중이든 진행 중이든)이나 강제로 정리할 때
+      allow delete: if isSignedIn() && (
+        (resource.data.hostId == request.auth.uid && resource.data.status == 'waiting') ||
+        isAdmin()
+      );
     }
 
     // 누가 이 대국을 보고 있는지 (관전자 하트비트) — presence.ts의 users/lastActiveAt과 같은 방식
