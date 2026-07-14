@@ -1,7 +1,16 @@
 /**
  * omokAI.ts — 오목 AI 모듈
  *
- * 프론트엔드 미니맥스 구현체입니다.
+ * 재귀적인 미니맥스 대신, 사람이 오목을 둘 때 실제로 생각하는 순서를 그대로 코드로 옮긴
+ * "규칙 우선순위" 방식이다.
+ *
+ *   1) 내가 지금 두면 바로 이기는 자리가 있는가? → 있으면 무조건 그곳에 둔다.
+ *   2) 상대가 다음 차례에 이길 수 있는 자리가 있는가? → 있으면 반드시 그곳을 막는다.
+ *   3) 그것도 아니라면, "이 자리에 두면 내 공격력이 얼마나 세지는지 + 상대 공격을
+ *      얼마나 막는지"를 점수로 매겨서 가장 높은 곳에 둔다 (evaluateBoard/scoreCell).
+ *   4) 어려움 난이도는 3번에서 후보 몇 개를 추려, "내가 여기 두면 상대는 최선으로
+ *      어떻게 응수할까?"까지 한 수만 더 내다보고 고른다 (재귀 없이 이중 for문으로 충분).
+ *
  * 백엔드 연동 시 `getAiMove` 함수만 교체하면 됩니다.
  *
  * 백엔드 교체 예시:
@@ -131,6 +140,11 @@ function evaluateBoard(board: Cell[][], aiColor: Cell): number {
 
 // ── Candidate generation ──────────────────────────────────────────────────────
 
+/**
+ * 돌이 이미 놓인 칸 주변(2칸 이내)의 빈 칸만 후보로 추리고, "공격 점수"와 "수비 점수"
+ * 중 큰 쪽을 기준으로 정렬한다. 이렇게 하면 15x15 = 225칸을 전부 검사하지 않아도
+ * 되고, "상대가 다음 수에 이기는 자리"도 항상 상위권에 걸려서 놓치지 않는다.
+ */
 function getCandidates(board: Cell[][], color: Cell, limit = 20): [number, number][] {
   let hasStone = false
   const seen = new Set<number>()
@@ -155,9 +169,6 @@ function getCandidates(board: Cell[][], color: Cell, limit = 20): [number, numbe
 
   const opponent: Cell = color === 'black' ? 'white' : 'black'
 
-  // 공격 점수(내가 두면 얼마나 좋은지)와 수비 점수(상대가 두면 얼마나 위협적인지)를
-  // 둘 다 계산해서 더 큰 쪽으로 후보를 정렬한다. 이렇게 해야 "상대가 다음 수에 이기는
-  // 자리"를 후보 목록에서 놓치지 않고 항상 상위권에 올려서 막을 수 있다.
   return raw
     .map(([r, c]) => {
       board[r][c] = color
@@ -172,57 +183,17 @@ function getCandidates(board: Cell[][], color: Cell, limit = 20): [number, numbe
     .map((x) => x.pos)
 }
 
-// ── Minimax with Alpha-Beta Pruning ───────────────────────────────────────────
+// ── 우선순위 규칙 ────────────────────────────────────────────────────────────────
 
-/**
- * 미니맥스 알고리즘 (알파-베타 가지치기)
- * @param board  현재 보드 상태
- * @param depth  탐색 깊이 (easy:2 / normal:3 / hard:4)
- * @param alpha  알파값
- * @param beta   베타값
- * @param isMax  최대화 플레이어(AI) 차례 여부
- * @param aiColor AI 돌 색상
- */
-function minimax(
-  board: Cell[][],
-  depth: number,
-  alpha: number,
-  beta: number,
-  isMax: boolean,
-  aiColor: Cell,
-): number {
-  if (depth === 0) return evaluateBoard(board, aiColor)
-
-  const humanColor: Cell = aiColor === 'white' ? 'black' : 'white'
-  const mover = isMax ? aiColor : humanColor
-  const candidates = getCandidates(board, mover, depth >= 3 ? 12 : 20)
-  if (candidates.length === 0) return 0
-
-  if (isMax) {
-    let best = -Infinity
-    for (const [r, c] of candidates) {
-      board[r][c] = aiColor
-      if (checkWin(board, r, c, aiColor)) { board[r][c] = null; return 1_000_000 + depth }
-      const val = minimax(board, depth - 1, alpha, beta, false, aiColor)
-      board[r][c] = null
-      best = Math.max(best, val)
-      alpha = Math.max(alpha, best)
-      if (beta <= alpha) break // 가지치기
-    }
-    return best
-  } else {
-    let best = Infinity
-    for (const [r, c] of candidates) {
-      board[r][c] = humanColor
-      if (checkWin(board, r, c, humanColor)) { board[r][c] = null; return -1_000_000 - depth }
-      const val = minimax(board, depth - 1, alpha, beta, true, aiColor)
-      board[r][c] = null
-      best = Math.min(best, val)
-      beta = Math.min(beta, best)
-      if (beta <= alpha) break
-    }
-    return best
+/** candidates 중에 color가 두면 바로 5줄이 완성되는 자리가 있으면 그 자리를 반환 */
+function findImmediateWin(board: Cell[][], candidates: [number, number][], color: Cell): [number, number] | null {
+  for (const [r, c] of candidates) {
+    board[r][c] = color
+    const wins = checkWin(board, r, c, color)
+    board[r][c] = null
+    if (wins) return [r, c]
   }
+  return null
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -242,30 +213,55 @@ export async function getAiMove(
   aiColor: Cell,
   difficulty: Difficulty,
 ): Promise<[number, number]> {
-  // 보드 deep copy — 미니맥스 내부에서 in-place mutation
-  const b = board.map((row) => [...row])
+  const b = board.map((row) => [...row]) // 원본 보드를 건드리지 않도록 복사
+  const humanColor: Cell = aiColor === 'white' ? 'black' : 'white'
 
-  const depthMap: Record<Difficulty, number> = { easy: 2, normal: 3, hard: 4 }
-  const depth = depthMap[difficulty]
-
-  const candidates = getCandidates(b, aiColor, depth >= 3 ? 12 : 20)
+  const candidates = getCandidates(b, aiColor, 24)
   if (candidates.length === 0) return [7, 7]
 
-  // Easy: 상위 후보 중 랜덤 (실력 약하게)
+  // 1. 내가 지금 이길 수 있으면 무조건 이긴다
+  const winMove = findImmediateWin(b, candidates, aiColor)
+  if (winMove) return winMove
+
+  // 2. 상대가 다음 수에 이길 수 있으면 반드시 막는다 (모든 난이도 공통 — 이걸 안 하면 AI가 어처구니없이 짐)
+  const blockMove = findImmediateWin(b, candidates, humanColor)
+  if (blockMove) return blockMove
+
+  // 3. 쉬움: 점수 상위 후보 중에서 무작위로 선택 (일부러 최적수를 안 고름)
   if (difficulty === 'easy') {
-    const pool = candidates.slice(0, 5)
+    const pool = candidates.slice(0, 6)
     return pool[Math.floor(Math.random() * pool.length)]
   }
 
-  let bestScore = -Infinity
-  let bestMove = candidates[0]
+  // 4. 보통: 지금 당장 공격+수비 점수가 가장 높은 자리에 둔다 (앞을 내다보지 않는 1수 판단)
+  if (difficulty === 'normal') {
+    return candidates[0]
+  }
 
-  for (const [r, c] of candidates) {
+  // 5. 어려움: 유력한 후보 몇 개에 대해 "내가 여기 두면 상대는 최선으로 어떻게 응수할까"를
+  //    한 수만 더 내다본다. 재귀 없이 이중 for문으로 충분히 구현된다.
+  let bestMove = candidates[0]
+  let bestWorstCase = -Infinity
+
+  for (const [r, c] of candidates.slice(0, 8)) {
     b[r][c] = aiColor
-    if (checkWin(b, r, c, aiColor)) { b[r][c] = null; return [r, c] } // 즉시 승리
-    const score = minimax(b, depth - 1, -Infinity, Infinity, false, aiColor)
+    const opponentReplies = getCandidates(b, humanColor, 8)
+
+    // 상대가 둘 수 있는 응수들 중 나에게 가장 불리한(=상대에게 가장 좋은) 경우를 찾는다
+    let worstForMe = Infinity
+    for (const [rr, rc] of opponentReplies) {
+      b[rr][rc] = humanColor
+      worstForMe = Math.min(worstForMe, evaluateBoard(b, aiColor))
+      b[rr][rc] = null
+    }
+
     b[r][c] = null
-    if (score > bestScore) { bestScore = score; bestMove = [r, c] }
+
+    // 그 "최악의 경우"가 그나마 가장 나은 후보를 고른다 (상대가 최선을 다해도 내가 제일 유리한 수)
+    if (worstForMe > bestWorstCase) {
+      bestWorstCase = worstForMe
+      bestMove = [r, c]
+    }
   }
 
   return bestMove
