@@ -6,7 +6,7 @@
 
 import { initializeApp } from 'firebase/app'
 import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { initializeFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -19,4 +19,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 
 export const auth = getAuth(app)
-export const db = getFirestore(app)
+
+// 아이패드 사파리 등 일부 브라우저/네트워크(공용 와이파이, 방화벽 등)에서는 Firestore가 기본으로
+// 쓰는 실시간 스트리밍(WebChannel) 연결이 조용히 끊긴 채로 남아있는 경우가 있다. 그러면 "쓰기"는
+// 정상적으로 되는데(내 화면엔 반영됨) 상대방에게 실시간으로 오는 변경 알림(onSnapshot)만 멈춰서,
+// 상대가 돌을 둬도 내 화면에는 안 보이는 것처럼 보인다. long polling을 자동 감지해서 필요할 때
+// 대체 연결 방식으로 전환하도록 설정하면 이 문제가 해결된다.
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+})

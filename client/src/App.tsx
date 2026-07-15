@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import LoginScreen from './components/LoginScreen'
 import ProfileSetupScreen from './components/ProfileSetupScreen'
@@ -103,9 +103,11 @@ export default function App() {
   }
 
   // 대전 결과로 내 승/패가 바뀌면 앱 전체 상태에도 반영해서 로비/랭킹에 바로 보이게 한다
-  function handleUserUpdate(patch: Partial<User>) {
+  // useCallback으로 고정해두지 않으면 App이 리렌더될 때마다 새 함수가 만들어져서, 이 함수를
+  // 의존성으로 쓰는 GameScreen의 방 실시간 구독(subscribeRoom)이 불필요하게 끊겼다 다시 붙는다.
+  const handleUserUpdate = useCallback((patch: Partial<User>) => {
     setUser((prev) => (prev ? { ...prev, ...patch } : prev))
-  }
+  }, [])
 
   if (checkingSession) return null
 
