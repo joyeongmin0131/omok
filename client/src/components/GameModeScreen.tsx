@@ -318,7 +318,7 @@ export default function GameModeScreen({ user, onStartAi, onStartPvp, onBack }: 
               }}
             >
               
-            </div>
+           
 
             <button
               onClick={() => onStartAi(difficulty)}
