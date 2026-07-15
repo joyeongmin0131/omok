@@ -10,9 +10,9 @@ interface Props {
 }
 
 const DIFFICULTY_INFO: Record<AIDifficulty, { label: string; desc: string; color: string; bg: string; emoji: string }> = {
-  easy:   { label: '쉬움',  desc: '처음 해보는 분께 추천!',    color: '#4ADE80', bg: 'rgba(74,222,128,0.1)',   emoji: '🌱' },
+  easy:   { label: '쉬움',  desc: '오목 초심자에게 추천',    color: '#4ADE80', bg: 'rgba(74,222,128,0.1)',   emoji: '🌱' },
   normal: { label: '보통',  desc: '어느 정도 해본 분께 추천', color: '#F5A830', bg: 'rgba(245,168,48,0.1)',   emoji: '🎮' },
-  hard:   { label: '어려움', desc: 'AI 풀파워 — 각오해요!', color: '#E85D40', bg: 'rgba(232,93,64,0.1)', emoji: '🔥' },
+  hard:   { label: '어려움', desc: '얘 좀 치니까 ㅈㅉ 잘하면 들어와요', color: '#E85D40', bg: 'rgba(232,93,64,0.1)', emoji: '🔥' },
 }
 
 type Mode = 'pvp' | 'ai'
