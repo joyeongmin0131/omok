@@ -244,59 +244,58 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
           maxWidth: 960,
           margin: '0 auto',
           padding: '28px 24px',
-          display: 'grid',
-          gridTemplateColumns: tab === 'ranking' ? '1fr' : '1fr 260px',
-          gap: 24,
         }}
+        className={tab === 'lobby' ? 'lobby-grid' : undefined}
       >
         {/* ── LOBBY TAB ── */}
         {tab === 'lobby' && (
           <>
-            <div>
-              {/* Start game CTA */}
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, #8B5E3C, #C9A87C)',
-                  borderRadius: 20,
-                  padding: '24px 28px',
-                  marginBottom: 24,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  boxShadow: '0 6px 20px rgba(139,94,60,0.25)',
-                }}
-              >
-                <div>
-                  <h2 style={{ fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 900, color: '#FFF8EC', margin: '0 0 4px' }}>
-                    지금 바로 시작해보세용
-                  </h2>
-                  <p style={{ fontSize: 13, color: 'rgba(255,248,236,0.8)', margin: 0 }}>
-                    친구와 1:1 대전 또는 AI와 연습 대전?
-                  </p>
-                </div>
-                <button
-                  onClick={onStartGame}
-                  style={{
-                    padding: '12px 24px',
-                    borderRadius: 14,
-                    border: 'none',
-                    background: 'linear-gradient(135deg, #E85D40, #C94C2E)',
-                    color: '#FFF8EC',
-                    fontSize: 15,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(232,93,64,0.4)',
-                    transition: 'transform 0.15s',
-                    flexShrink: 0,
-                    fontFamily: "'Noto Sans KR', sans-serif",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-1px)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
-                >
-                  🎮 게임 시작
-                </button>
+            {/* Start game CTA */}
+            <div
+              className="area-cta"
+              style={{
+                background: 'linear-gradient(135deg, #8B5E3C, #C9A87C)',
+                borderRadius: 20,
+                padding: '24px 28px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 6px 20px rgba(139,94,60,0.25)',
+              }}
+            >
+              <div>
+                <h2 style={{ fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 900, color: '#FFF8EC', margin: '0 0 4px' }}>
+                  지금 바로 시작해보세용
+                </h2>
+                <p style={{ fontSize: 13, color: 'rgba(255,248,236,0.8)', margin: 0 }}>
+                  친구와 1:1 대전 또는 AI와 연습 대전?
+                </p>
               </div>
+              <button
+                onClick={onStartGame}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 14,
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #E85D40, #C94C2E)',
+                  color: '#FFF8EC',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(232,93,64,0.4)',
+                  transition: 'transform 0.15s',
+                  flexShrink: 0,
+                  fontFamily: "'Noto Sans KR', sans-serif",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-1px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+              >
+                🎮 게임 시작
+              </button>
+            </div>
 
+            {/* 진행 중인 게임(관전창) + 관리자 전용 대기방 정리 */}
+            <div className="area-active">
               {/* Active games */}
               <div style={{ marginBottom: 8 }}>
                 <h3 style={{ fontFamily: "'Noto Serif KR', serif", fontSize: 17, fontWeight: 700, color: '#3D2B1F', margin: '0 0 14px' }}>
@@ -409,8 +408,8 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
               )}
             </div>
 
-            {/* Right: online users */}
-            <div>
+            {/* Right: online users (내 상태) */}
+            <div className="area-side">
               <div
                 style={{
                   background: '#FFF8EC',
@@ -585,6 +584,23 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
         @keyframes lobbyBounce {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-10px); }
+        }
+        .lobby-grid {
+          display: grid;
+          gap: 24px;
+          align-items: start;
+          grid-template-columns: 1fr 260px;
+          grid-template-areas: "cta side" "active side";
+        }
+        .lobby-grid .area-cta { grid-area: cta; }
+        .lobby-grid .area-active { grid-area: active; }
+        .lobby-grid .area-side { grid-area: side; }
+        /* 화면이 좁을 때: 게임 시작 상자 → 내 상태(온라인 목록/전적) → 관전창(진행 중인 게임) 순서로 세로 배치 */
+        @media (max-width: 720px) {
+          .lobby-grid {
+            grid-template-columns: 1fr;
+            grid-template-areas: "cta" "side" "active";
+          }
         }
       `}</style>
     </div>
