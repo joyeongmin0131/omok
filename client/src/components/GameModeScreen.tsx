@@ -310,14 +310,7 @@ export default function GameModeScreen({ user, onStartAi, onStartPvp, onBack }: 
                 </button>
               ))}
             </div>
-            <div
-              style={{
-                marginTop: 14, padding: '10px 14px',
-                borderRadius: 10, background: '#FBF4E6',
-                border: '1px solid #EDE0CC', fontSize: 12, color: '#9A7A62', lineHeight: 1.6,
-              }}
-            >
-            </div>   
+           
            
 
             <button
