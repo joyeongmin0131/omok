@@ -16,12 +16,18 @@ interface Props {
   onUserUpdate: (patch: Partial<User>) => void
 }
 
-type ModalType = 'none' | 'undo_incoming' | 'undo_waiting' | 'resign_confirm' | 'result'
+type ModalType = 'none' | 'roulette' | 'undo_incoming' | 'undo_waiting' | 'resign_confirm' | 'result'
 
 const SIZE = 15
 const CELL = 36
 const PAD = 28
 const TURN_SECONDS = roomsApi.TURN_SECONDS
+const ROULETTE_SPIN_MS = 2600
+const ROULETTE_REVEAL_MS = 1600
+
+function opposite(color: Cell): Cell {
+  return color === 'black' ? 'white' : 'black'
+}
 
 const AI_OPPONENT: Record<AIDifficulty, { nickname: string; character: CharacterId }> = {
   easy:   { nickname: 'AI 쉬움',   character: 'rabbit' },
@@ -158,13 +164,18 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
   const [roomDeleted, setRoomDeleted] = useState(false) // 관리자가 방을 강제로 지운 경우
   const [nowTick, setNowTick] = useState(Date.now())
   const [spectators, setSpectators] = useState<Spectator[]>([]) // PVP 전용 — 지금 이 대국을 보고 있는 사람들
+  const [rouletteRevealed, setRouletteRevealed] = useState(false)
+  const [rouletteMyColor, setRouletteMyColor] = useState<Cell>(null)
+  const rouletteShownRef = useRef<string | null>(null) // 이 방(roomId)에서 이미 룰렛을 보여줬는지
   const aiThinking = useRef(false)
 
-  const myColor: Cell = !isPvp ? 'black' : room && room.host.id === user.id ? 'black' : 'white'
+  // 흑/백은 방 생성 시 정해진 room.hostColor를 기준으로 결정된다 (방장이 아니면 반대 색)
+  const isHost = !room || room.host.id === user.id
+  const myColor: Cell = !isPvp ? 'black' : room ? (isHost ? room.hostColor : opposite(room.hostColor)) : 'black'
   const opColor: Cell = myColor === 'black' ? 'white' : 'black'
   const opponent = isPvp
     ? room
-      ? (myColor === 'black' ? room.guest : room.host) ?? { id: '', nickname: '상대방', character: 'bear', photoUrl: null }
+      ? (isHost ? room.guest : room.host) ?? { id: '', nickname: '상대방', character: 'bear', photoUrl: null }
       : { id: '', nickname: '상대방', character: 'bear', photoUrl: null }
     : { nickname: AI_OPPONENT[aiDifficulty].nickname, character: AI_OPPONENT[aiDifficulty].character as string, photoUrl: null as string | null }
 
@@ -191,7 +202,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
       setLastMove(r.lastMove)
       setMoveCount(r.moveCount)
 
-      const mine: Cell = r.host.id === user.id ? 'black' : 'white'
+      const mine: Cell = r.host.id === user.id ? r.hostColor : opposite(r.hostColor)
 
       if (r.winner) {
         setWinner(r.winner)
@@ -204,6 +215,15 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
         setModal('undo_waiting')
       } else if (r.undoRequestBy) {
         setModal('undo_incoming')
+      } else if (r.status === 'playing' && r.moveCount === 0 && rouletteShownRef.current !== pvpRoomId) {
+        // 두 사람이 막 만난 시점(첫 수를 두기 전) — 룰렛을 돌려 흑/백을 극적으로 보여준다.
+        // 실제 결과(hostColor)는 방 생성 시 이미 정해져 있으므로, 여기선 그 값을 보여주기만 한다.
+        rouletteShownRef.current = pvpRoomId
+        setRouletteMyColor(mine)
+        setRouletteRevealed(false)
+        setModal('roulette')
+        setTimeout(() => setRouletteRevealed(true), ROULETTE_SPIN_MS)
+        setTimeout(() => setModal((m) => (m === 'roulette' ? 'none' : m)), ROULETTE_SPIN_MS + ROULETTE_REVEAL_MS)
       } else {
         setModal((m) => (m === 'undo_incoming' || m === 'undo_waiting' ? 'none' : m))
       }
@@ -571,6 +591,46 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
 
       {/* ── Modals ── */}
 
+      {modal === 'roulette' && (
+        <ModalOverlay>
+          <div style={{ textAlign: 'center' }}>
+            <h3 style={{ fontFamily: "'Noto Serif KR',serif", fontSize: 20, fontWeight: 900, color: '#3D2B1F', margin: '0 0 6px' }}>
+              선공 정하는 중...
+            </h3>
+            <p style={{ color: '#9A7A62', fontSize: 13, margin: '0 0 24px' }}>
+              룰렛으로 누가 흑돌(선공)이 될지 정해요!
+            </p>
+            {!rouletteRevealed ? (
+              <div
+                style={{
+                  width: 72, height: 72, borderRadius: '50%', margin: '0 auto 20px',
+                  background: 'conic-gradient(#111 0deg 180deg, #FFF8EC 180deg 360deg)',
+                  border: '2px solid #C9A87C', boxShadow: '2px 6px 14px rgba(0,0,0,0.3)',
+                  animation: 'rouletteSpin 0.5s linear infinite',
+                }}
+              />
+            ) : (
+              <div style={{ marginBottom: 20 }}>
+                <div
+                  style={{
+                    width: 72, height: 72, borderRadius: '50%', margin: '0 auto 14px',
+                    background: rouletteMyColor === 'black'
+                      ? 'radial-gradient(circle at 32% 30%,#646464,#111)'
+                      : 'radial-gradient(circle at 32% 30%,#FFFAF2,#C8BBAA)',
+                    border: rouletteMyColor === 'white' ? '1px solid #A89070' : 'none',
+                    boxShadow: '2px 6px 14px rgba(0,0,0,0.35)',
+                    animation: 'stonePop 0.3s ease-out',
+                  }}
+                />
+                <p style={{ fontSize: 17, fontWeight: 800, color: '#3D2B1F', margin: 0 }}>
+                  나는 {rouletteMyColor === 'black' ? '흑돌 (선공) 🎉' : '백돌 (후공)'}!
+                </p>
+              </div>
+            )}
+          </div>
+        </ModalOverlay>
+      )}
+
       {modal === 'undo_incoming' && (
         <ModalOverlay>
           <div style={{ textAlign: 'center' }}>
@@ -656,6 +716,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
       <style>{`
         @keyframes stonePop { from { transform: scale(0.6); opacity: 0.5; } to { transform: scale(1); opacity: 1; } }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes rouletteSpin { from { transform: rotate(0deg); } to { transform: rotate(1080deg); } }
         @keyframes fadeIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
       `}</style>
     </div>

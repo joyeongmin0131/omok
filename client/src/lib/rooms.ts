@@ -52,6 +52,7 @@ interface RoomDoc {
   title: string
   hostId: string; hostNickname: string; hostCharacter: string; hostPhotoUrl: string | null
   guestId: string | null; guestNickname: string | null; guestCharacter: string | null; guestPhotoUrl: string | null
+  hostColor: Cell // 방장이 흑돌인지 백돌인지 — 방 생성 시 무작위로 정해짐 (룰렛으로 보여준다)
   board: Cell[]
   turn: Cell
   status: 'waiting' | 'playing' | 'ended'
@@ -77,6 +78,7 @@ export interface RoomState {
   winLine: [number, number][]
   undoRequestBy: Cell | null
   turnStartedAt: number | null
+  hostColor: Cell
   host: PlayerInfo
   guest: PlayerInfo | null
 }
@@ -94,6 +96,7 @@ function toRoomState(id: string, r: RoomDoc): RoomState {
     winLine: r.winLine.map((p) => [p.r, p.c]),
     undoRequestBy: r.undoRequestBy,
     turnStartedAt: r.turnStartedAt ? r.turnStartedAt.toMillis() : null,
+    hostColor: r.hostColor,
     host: { id: r.hostId, nickname: r.hostNickname, character: r.hostCharacter, photoUrl: r.hostPhotoUrl },
     guest: r.guestId
       ? { id: r.guestId, nickname: r.guestNickname!, character: r.guestCharacter!, photoUrl: r.guestPhotoUrl }
@@ -101,15 +104,19 @@ function toRoomState(id: string, r: RoomDoc): RoomState {
   }
 }
 
-// 방 생성 — 만든 사람은 항상 흑돌(black)
+// 방 생성 — 방장이 흑돌(선공)일지 백돌일지는 여기서 동전 던지듯 무작위로 정해서 저장해둔다.
+// 실제 화면에는 "룰렛이 도는" 연출로 보여주지만, 결과 자체는 이미 정해져 있는 값을 보여주는 것뿐이다
+// (두 사람이 서로 다른 결과를 보면 안 되니, 무작위 값은 이렇게 한 곳에만 저장해야 한다).
 export async function createRoom(title: string, host: User): Promise<string> {
   const roomRef = doc(collection(db, 'rooms'))
+  const hostColor: Cell = Math.random() < 0.5 ? 'black' : 'white'
   const room: Omit<RoomDoc, 'createdAt' | 'turnStartedAt'> = {
     title: title?.trim() || `${host.nickname}의 방`,
     hostId: host.id, hostNickname: host.nickname, hostCharacter: host.character, hostPhotoUrl: host.photoUrl,
     guestId: null, guestNickname: null, guestCharacter: null, guestPhotoUrl: null,
+    hostColor,
     board: flattenBoard(createBoard()),
-    turn: 'black',
+    turn: 'black', // 오목은 항상 흑돌이 먼저 둔다 (흑돌이 누구인지와는 별개)
     status: 'waiting',
     moveCount: 0,
     lastMove: null,
@@ -133,8 +140,9 @@ export async function adminDeleteRoom(roomId: string): Promise<void> {
   await deleteDoc(doc(db, 'rooms', roomId))
 }
 
-// 방 입장 — 들어가는 사람은 항상 백돌(white). 트랜잭션으로 "이미 다른 사람이 들어간 방에
-// 동시에 들어가는" 경쟁 상황을 막는다.
+// 방 입장 — 트랜잭션으로 "이미 다른 사람이 들어간 방에 동시에 들어가는" 경쟁 상황을 막는다.
+// 흑/백은 방 생성 시 이미 정해진 hostColor로 결정되고(방장이 아니면 반대 색), 게임 화면에서
+// 룰렛 애니메이션으로 보여준다.
 export async function joinRoom(roomId: string, guest: User): Promise<void> {
   const roomRef = doc(db, 'rooms', roomId)
   await runTransaction(db, async (tx) => {
@@ -151,8 +159,8 @@ export async function joinRoom(roomId: string, guest: User): Promise<void> {
 }
 
 function winnerLoserIds(room: RoomDoc, winnerColor: Cell) {
-  const winnerId = winnerColor === 'black' ? room.hostId : room.guestId!
-  const loserId = winnerColor === 'black' ? room.guestId! : room.hostId
+  const winnerId = winnerColor === room.hostColor ? room.hostId : room.guestId!
+  const loserId = winnerColor === room.hostColor ? room.guestId! : room.hostId
   return { winnerId, loserId }
 }
 

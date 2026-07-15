@@ -81,7 +81,7 @@ export default function SpectateScreen({ user, roomId, onLeave }: Props) {
 
       {/* Player info */}
       <div style={{ display: 'flex', justifyContent: 'center', gap: 32, padding: '18px 24px', flexWrap: 'wrap' }}>
-        {([['black', room.host], ['white', room.guest]] as [Cell, typeof room.host | null][]).map(([color, p]) => {
+        {([[room.hostColor, room.host], [room.hostColor === 'black' ? 'white' : 'black', room.guest]] as [Cell, typeof room.host | null][]).map(([color, p]) => {
           if (!p) return null
           const isTurn = room.turn === color && room.status === 'playing'
           const animState = room.winner ? (room.winner === color ? 'win' : 'lose') : 'idle'
@@ -178,7 +178,7 @@ export default function SpectateScreen({ user, roomId, onLeave }: Props) {
 
       <div style={{ textAlign: 'center', padding: '4px 24px 20px', fontSize: 13, color: '#9A7A62' }}>
         {room.status === 'ended' && room.winner
-          ? `🏆 ${(room.winner === 'black' ? room.host.nickname : room.guest?.nickname) ?? '?'}님 승리! (총 ${room.moveCount}수)`
+          ? `🏆 ${(room.winner === room.hostColor ? room.host.nickname : room.guest?.nickname) ?? '?'}님 승리! (총 ${room.moveCount}수)`
           : `총 ${room.moveCount}수 진행 중`}
       </div>
     </div>
