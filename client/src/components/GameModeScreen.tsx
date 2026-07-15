@@ -12,7 +12,7 @@ interface Props {
 const DIFFICULTY_INFO: Record<AIDifficulty, { label: string; desc: string; color: string; bg: string; emoji: string }> = {
   easy:   { label: '쉬움',  desc: '처음 해보는 분께 추천!',    color: '#4ADE80', bg: 'rgba(74,222,128,0.1)',   emoji: '🌱' },
   normal: { label: '보통',  desc: '어느 정도 해본 분께 추천', color: '#F5A830', bg: 'rgba(245,168,48,0.1)',   emoji: '🎮' },
-  hard:   { label: '어려움', desc: '미니맥스 풀파워 — 각오해요!', color: '#E85D40', bg: 'rgba(232,93,64,0.1)', emoji: '🔥' },
+  hard:   { label: '어려움', desc: 'AI 풀파워 — 각오해요!', color: '#E85D40', bg: 'rgba(232,93,64,0.1)', emoji: '🔥' },
 }
 
 type Mode = 'pvp' | 'ai'
@@ -174,7 +174,7 @@ export default function GameModeScreen({ user, onStartAi, onStartPvp, onBack }: 
                 AI 대전
               </div>
               <div style={{ fontSize: 12, color: '#9A7A62', lineHeight: 1.5 }}>
-                미니맥스 AI와 대결! 난이도를 골라보세요.
+                AI와 대결! 난이도를 골라보세요.
               </div>
               {mode === 'ai' && (
                 <div style={{ marginTop: 10, fontSize: 11, color: '#8B5E3C', fontWeight: 600 }}>
