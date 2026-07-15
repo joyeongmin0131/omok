@@ -24,14 +24,30 @@ export function useResponsiveBoard(opts: ResponsiveBoardOptions) {
   }))
 
   useEffect(() => {
+    // 아이패드 등 태블릿 사파리는 스크롤/키보드/주소창 애니메이션 중에도 resize 이벤트를
+    // 아주 자주(때론 초당 여러 번) 쏜다. 매번 그대로 setState 하면 보드 225칸이 통째로
+    // 다시 그려져서 게임 도중 화면이 심하게 버벅인다(딜레이). 그래서
+    //   1) requestAnimationFrame으로 한 프레임에 한 번만 계산하고
+    //   2) 실제로 크기가 바뀌었을 때만 setState 해서 불필요한 리렌더를 건너뛴다.
+    let frame = 0
     function onResize() {
-      setViewport({ width: window.innerWidth, height: window.innerHeight })
+      if (frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        setViewport((prev) => {
+          const width = window.innerWidth
+          const height = window.innerHeight
+          if (prev.width === width && prev.height === height) return prev
+          return { width, height }
+        })
+      })
     }
-    window.addEventListener('resize', onResize)
-    window.addEventListener('orientationchange', onResize)
+    window.addEventListener('resize', onResize, { passive: true })
+    window.addEventListener('orientationchange', onResize, { passive: true })
     return () => {
       window.removeEventListener('resize', onResize)
       window.removeEventListener('orientationchange', onResize)
+      if (frame) cancelAnimationFrame(frame)
     }
   }, [])
 
