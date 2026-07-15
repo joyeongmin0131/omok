@@ -6,6 +6,7 @@ import * as roomsApi from '../lib/rooms'
 import type { RoomState } from '../lib/rooms'
 import { getUserProfile } from '../lib/api'
 import { subscribeSpectators, type Spectator } from '../lib/spectators'
+import { useResponsiveBoard } from '../lib/useResponsiveBoard'
 
 interface Props {
   user: User
@@ -19,11 +20,14 @@ interface Props {
 type ModalType = 'none' | 'roulette' | 'undo_incoming' | 'undo_waiting' | 'resign_confirm' | 'result'
 
 const SIZE = 15
-const CELL = 36
-const PAD = 28
+const MAX_CELL = 36
+const MAX_PAD = 28
 const TURN_SECONDS = roomsApi.TURN_SECONDS
 const ROULETTE_SPIN_MS = 2600
 const ROULETTE_REVEAL_MS = 1600
+// 플레이어 바(위/아래) 한 줄의 대략적인 높이 — 보드 크기를 계산할 때 "이만큼은 항상 빼고 계산해야 한다"는 기준
+const PLAYER_BAR_H = 78
+const HINT_H = 30
 
 function opposite(color: Cell): Cell {
   return color === 'black' ? 'white' : 'black'
@@ -35,22 +39,22 @@ const AI_OPPONENT: Record<AIDifficulty, { nickname: string; character: Character
   hard:   { nickname: 'AI 어려움', character: 'bear' },
 }
 
-function TimerRing({ seconds, active }: { seconds: number; active: boolean }) {
-  const r = 22, circ = 2 * Math.PI * r
+function TimerRing({ seconds, active, size = 56 }: { seconds: number; active: boolean; size?: number }) {
+  const c = size / 2, r = c - 6, circ = 2 * Math.PI * r
   const progress = seconds / TURN_SECONDS
   const color = seconds <= 10 ? '#E85D40' : seconds <= 20 ? '#F5A830' : '#4ADE80'
   return (
-    <svg width="56" height="56" viewBox="0 0 56 56">
-      <circle cx="28" cy="28" r={r} fill="none" stroke="#EDE0CC" strokeWidth="4" />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={c} cy={c} r={r} fill="none" stroke="#EDE0CC" strokeWidth="4" />
       {active && (
         <circle
-          cx="28" cy="28" r={r} fill="none" stroke={color} strokeWidth="4"
+          cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth="4"
           strokeDasharray={`${circ * progress} ${circ}`}
-          strokeLinecap="round" transform="rotate(-90 28 28)"
+          strokeLinecap="round" transform={`rotate(-90 ${c} ${c})`}
           style={{ transition: 'stroke-dasharray 0.9s linear, stroke 0.3s' }}
         />
       )}
-      <text x="28" y="33" textAnchor="middle" fontSize="13" fontWeight="700"
+      <text x={c} y={c + 5} textAnchor="middle" fontSize="13" fontWeight="700"
         fill={active ? color : '#C9A87C'} fontFamily="'Noto Sans KR', sans-serif">
         {active ? seconds : '—'}
       </text>
@@ -59,15 +63,16 @@ function TimerRing({ seconds, active }: { seconds: number; active: boolean }) {
 }
 
 function PlayerBar({
-  nickname, character, photoUrl, color, isMyTurn, timerSeconds, animState, isTop,
+  nickname, character, photoUrl, color, isMyTurn, timerSeconds, animState, isTop, compact,
 }: {
   nickname: string; character: string; photoUrl: string | null; color: Cell
-  isMyTurn: boolean; timerSeconds: number; animState: CharacterAnimState; isTop?: boolean
+  isMyTurn: boolean; timerSeconds: number; animState: CharacterAnimState; isTop?: boolean; compact?: boolean
 }) {
+  const avatarSize = compact ? 36 : 48
   return (
     <div
       style={{
-        display: 'flex', alignItems: 'center', gap: 14, padding: '10px 20px',
+        display: 'flex', alignItems: 'center', gap: compact ? 10 : 14, padding: compact ? '6px 10px' : '10px 20px',
         background: isMyTurn ? 'rgba(232,93,64,0.07)' : 'transparent',
         borderRadius: 16, transition: 'all 0.3s',
         border: isMyTurn ? '1.5px solid rgba(232,93,64,0.25)' : '1.5px solid transparent',
@@ -76,18 +81,21 @@ function PlayerBar({
     >
       <div
         style={{
-          width: 56, height: 56, borderRadius: '50%', flexShrink: 0,
+          width: avatarSize + 8, height: avatarSize + 8, borderRadius: '50%', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           border: isMyTurn ? '2px solid #E85D40' : '2px solid transparent',
           boxShadow: isMyTurn ? '0 0 0 3px rgba(232,93,64,0.2)' : 'none',
           transition: 'all 0.3s',
         }}
       >
-        <CharacterAvatar character={character} photoUrl={photoUrl} animState={animState} size={48} />
+        <CharacterAvatar character={character} photoUrl={photoUrl} animState={animState} size={avatarSize} />
       </div>
-      <div style={{ flex: 1, textAlign: isTop ? 'left' : 'right' }}>
+      <div style={{ flex: 1, minWidth: 0, textAlign: isTop ? 'left' : 'right' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: isTop ? 'flex-start' : 'flex-end' }}>
-          <span style={{ fontWeight: 700, fontSize: 15, color: '#3D2B1F' }}>{nickname}</span>
+          <span style={{
+            fontWeight: 700, fontSize: compact ? 13 : 15, color: '#3D2B1F',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+          }}>{nickname}</span>
           <div
             style={{
               width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
@@ -99,11 +107,13 @@ function PlayerBar({
             }}
           />
         </div>
-        <div style={{ fontSize: 12, color: '#9A7A62', marginTop: 2 }}>
-          {color === 'black' ? '흑돌' : '백돌'} · {isMyTurn ? '⏰ 내 차례' : '대기 중'}
-        </div>
+        {!compact && (
+          <div style={{ fontSize: 12, color: '#9A7A62', marginTop: 2 }}>
+            {color === 'black' ? '흑돌' : '백돌'} · {isMyTurn ? '⏰ 내 차례' : '대기 중'}
+          </div>
+        )}
       </div>
-      <TimerRing seconds={timerSeconds} active={isMyTurn} />
+      <TimerRing seconds={timerSeconds} active={isMyTurn} size={compact ? 40 : 56} />
     </div>
   )
 }
@@ -381,7 +391,15 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
   }
 
   const isWinCell = (r: number, c: number) => winLine.some(([wr, wc]) => wr === r && wc === c)
-  const boardPx = CELL * (SIZE - 1) + PAD * 2
+
+  // 휴대폰(세로/가로)부터 데스크탑까지, 화면 크기에 맞춰 보드 크기와 레이아웃 방향을 정한다.
+  const { isNarrow, boardPx, pad, cell: cellPx } = useResponsiveBoard({
+    size: SIZE, maxCell: MAX_CELL, maxPad: MAX_PAD, minBoard: 300,
+    rowReservedH: 32 + 128 + 24, // 바깥 여백 + 사이드바 폭 + 사이드바와 보드 사이 간격
+    rowReservedV: PLAYER_BAR_H * 2 + HINT_H + 24,
+    colReservedH: 24,
+    colReservedV: PLAYER_BAR_H * 2 + HINT_H + 24 + 140 + 12, // 사이드바가 보드 아래로 내려오는 만큼 더 뺀다
+  })
 
   if (isPvp && roomDeleted) {
     return (
@@ -406,18 +424,18 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5EDD8', display: 'flex', flexDirection: 'column', fontFamily: "'Noto Sans KR', sans-serif" }}>
+    <div style={{ minHeight: '100vh', background: '#F5EDD8', display: 'flex', flexDirection: 'column', fontFamily: "'Noto Sans KR', sans-serif", overflowX: 'hidden' }}>
       {/* Top player bar */}
-      <div style={{ background: 'rgba(255,248,236,0.9)', borderBottom: '1px solid #E0CCB0', padding: '0 24px', flexShrink: 0 }}>
+      <div style={{ background: 'rgba(255,248,236,0.9)', borderBottom: '1px solid #E0CCB0', padding: isNarrow ? '0 10px' : '0 24px', flexShrink: 0 }}>
         <PlayerBar
           nickname={opponent.nickname} character={opponent.character} photoUrl={opponent.photoUrl}
           color={opColor} isMyTurn={turn === opColor && !winner} timerSeconds={timerSec}
-          animState={animStateFor(opColor)} isTop
+          animState={animStateFor(opColor)} isTop compact={isNarrow}
         />
       </div>
 
       {/* Main area */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 20px', gap: 24 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: isNarrow ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', padding: isNarrow ? '10px 12px' : '14px 20px', gap: isNarrow ? 12 : 24 }}>
 
         {/* Board */}
         <div>
@@ -432,8 +450,8 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
             style={{
               width: boardPx, height: boardPx, position: 'relative',
               background:
-                'repeating-linear-gradient(90deg,rgba(140,90,30,0.07) 0,rgba(140,90,30,0.07) 1px,transparent 1px,transparent 36px),' +
-                'repeating-linear-gradient(rgba(140,90,30,0.07) 0,rgba(140,90,30,0.07) 1px,transparent 1px,transparent 36px),' +
+                `repeating-linear-gradient(90deg,rgba(140,90,30,0.07) 0,rgba(140,90,30,0.07) 1px,transparent 1px,transparent ${cellPx}px),` +
+                `repeating-linear-gradient(rgba(140,90,30,0.07) 0,rgba(140,90,30,0.07) 1px,transparent 1px,transparent ${cellPx}px),` +
                 'linear-gradient(160deg,#D4A055 0%,#C08A40 25%,#B87A35 50%,#C89048 75%,#D4A055 100%)',
               borderRadius: 8, cursor: isMyTurn ? 'crosshair' : 'default', userSelect: 'none',
               boxShadow: '0 12px 40px rgba(61,43,31,0.35),0 4px 12px rgba(61,43,31,0.2),inset 0 1px 0 rgba(255,210,140,0.4)',
@@ -444,21 +462,21 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
             <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} width={boardPx} height={boardPx}>
               {Array.from({ length: SIZE }, (_, i) => (
                 <g key={i}>
-                  <line x1={PAD + i * CELL} y1={PAD} x2={PAD + i * CELL} y2={PAD + (SIZE - 1) * CELL}
+                  <line x1={pad + i * cellPx} y1={pad} x2={pad + i * cellPx} y2={pad + (SIZE - 1) * cellPx}
                     stroke="rgba(80,45,15,0.55)" strokeWidth={i === 0 || i === SIZE - 1 ? 1.5 : 1} />
-                  <line x1={PAD} y1={PAD + i * CELL} x2={PAD + (SIZE - 1) * CELL} y2={PAD + i * CELL}
+                  <line x1={pad} y1={pad + i * cellPx} x2={pad + (SIZE - 1) * cellPx} y2={pad + i * cellPx}
                     stroke="rgba(80,45,15,0.55)" strokeWidth={i === 0 || i === SIZE - 1 ? 1.5 : 1} />
                 </g>
               ))}
               {[[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]].map(([r, c]) => (
-                <circle key={`${r}-${c}`} cx={PAD + c * CELL} cy={PAD + r * CELL} r={4.5} fill="rgba(75,40,12,0.55)" />
+                <circle key={`${r}-${c}`} cx={pad + c * cellPx} cy={pad + r * cellPx} r={4.5 * (cellPx / MAX_CELL)} fill="rgba(75,40,12,0.55)" />
               ))}
               {Array.from({ length: SIZE }, (_, i) => (
                 <g key={`coord-${i}`}>
-                  <text x={PAD + i * CELL} y={PAD - 10} textAnchor="middle" fontSize="9" fill="rgba(80,45,15,0.5)" fontFamily="'Noto Sans KR',sans-serif">
+                  <text x={pad + i * cellPx} y={pad - 10} textAnchor="middle" fontSize={Math.max(7, 9 * (cellPx / MAX_CELL))} fill="rgba(80,45,15,0.5)" fontFamily="'Noto Sans KR',sans-serif">
                     {String.fromCharCode(65 + i)}
                   </text>
-                  <text x={PAD - 12} y={PAD + i * CELL + 4} textAnchor="middle" fontSize="9" fill="rgba(80,45,15,0.5)" fontFamily="'Noto Sans KR',sans-serif">
+                  <text x={pad - 12} y={pad + i * cellPx + 4} textAnchor="middle" fontSize={Math.max(7, 9 * (cellPx / MAX_CELL))} fill="rgba(80,45,15,0.5)" fontFamily="'Noto Sans KR',sans-serif">
                     {SIZE - i}
                   </text>
                 </g>
@@ -467,7 +485,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
 
             {Array.from({ length: SIZE }, (_, row) =>
               Array.from({ length: SIZE }, (_, col) => {
-                const cell = board[row][col]
+                const stone = board[row][col]
                 const isHov = hover?.[0] === row && hover?.[1] === col
                 const isLast = lastMove?.[0] === row && lastMove?.[1] === col
                 const isWin = isWinCell(row, col)
@@ -476,37 +494,37 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
                     key={`${row}-${col}`}
                     style={{
                       position: 'absolute',
-                      left: PAD + col * CELL - CELL / 2, top: PAD + row * CELL - CELL / 2,
-                      width: CELL, height: CELL,
+                      left: pad + col * cellPx - cellPx / 2, top: pad + row * cellPx - cellPx / 2,
+                      width: cellPx, height: cellPx,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1,
                     }}
                     onClick={() => placeStone(row, col)}
-                    onMouseEnter={() => isMyTurn && !cell && setHover([row, col])}
+                    onMouseEnter={() => isMyTurn && !stone && setHover([row, col])}
                   >
-                    {cell ? (
+                    {stone ? (
                       <div style={{
-                        width: CELL - 4, height: CELL - 4, borderRadius: '50%',
-                        background: cell === 'black'
+                        width: cellPx - 4, height: cellPx - 4, borderRadius: '50%',
+                        background: stone === 'black'
                           ? 'radial-gradient(circle at 32% 30%,#646464,#111)'
                           : 'radial-gradient(circle at 32% 30%,#FFFAF2,#C8BBAA)',
                         boxShadow: isWin
-                          ? `0 0 0 3px #E85D40,0 3px 10px rgba(0,0,0,${cell === 'black' ? '0.6' : '0.25'})`
-                          : cell === 'black'
+                          ? `0 0 0 3px #E85D40,0 3px 10px rgba(0,0,0,${stone === 'black' ? '0.6' : '0.25'})`
+                          : stone === 'black'
                           ? '2px 5px 10px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.18)'
                           : '2px 5px 8px rgba(0,0,0,0.22),inset 0 1px 0 rgba(255,255,255,0.9)',
-                        border: cell === 'white' ? '1px solid #A89070' : 'none',
+                        border: stone === 'white' ? '1px solid #A89070' : 'none',
                         position: 'relative', animation: 'stonePop 0.15s ease-out',
                       }}>
                         {isLast && (
                           <div style={{
                             position: 'absolute', inset: '30%', borderRadius: '50%',
-                            background: cell === 'black' ? 'rgba(255,100,60,0.85)' : 'rgba(200,70,40,0.7)',
+                            background: stone === 'black' ? 'rgba(255,100,60,0.85)' : 'rgba(200,70,40,0.7)',
                           }} />
                         )}
                       </div>
                     ) : isHov ? (
                       <div style={{
-                        width: CELL - 6, height: CELL - 6, borderRadius: '50%',
+                        width: cellPx - 6, height: cellPx - 6, borderRadius: '50%',
                         background: 'radial-gradient(circle at 32% 30%,#646464,#111)',
                         opacity: 0.28, boxShadow: '1px 3px 6px rgba(0,0,0,0.3)',
                       }} />
@@ -518,17 +536,21 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
           </div>
         </div>
 
-        {/* Right sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 128 }}>
+        {/* Right sidebar (좁은 화면에서는 보드 아래로 내려와 가로로 나열된다) */}
+        <div style={{
+          display: 'flex', flexDirection: isNarrow ? 'row' : 'column', flexWrap: 'wrap',
+          justifyContent: 'center', gap: 10, minWidth: isNarrow ? 0 : 128, width: isNarrow ? '100%' : 'auto',
+          maxWidth: isNarrow ? boardPx : 'none',
+        }}>
           {/* Move count */}
-          <div style={{ background: 'rgba(255,248,236,0.9)', borderRadius: 16, padding: '14px 12px', border: '1px solid #E0CCB0', textAlign: 'center' }}>
+          <div style={{ flex: isNarrow ? '1 1 90px' : 'none', background: 'rgba(255,248,236,0.9)', borderRadius: 16, padding: '14px 12px', border: '1px solid #E0CCB0', textAlign: 'center' }}>
             <p style={{ margin: '0 0 4px', fontSize: 11, color: '#9A7A62', fontWeight: 600 }}>총 착수</p>
             <p style={{ margin: 0, fontSize: 24, fontWeight: 900, color: '#3D2B1F', fontFamily: "'Noto Serif KR',serif" }}>{moveCount}</p>
             <p style={{ margin: '2px 0 0', fontSize: 10, color: '#B09070' }}>수</p>
           </div>
 
           {/* Game mode badge */}
-          <div style={{ background: 'rgba(255,248,236,0.9)', borderRadius: 14, padding: '10px', border: '1px solid #E0CCB0', textAlign: 'center' }}>
+          <div style={{ flex: isNarrow ? '1 1 90px' : 'none', background: 'rgba(255,248,236,0.9)', borderRadius: 14, padding: '10px', border: '1px solid #E0CCB0', textAlign: 'center' }}>
             <div style={{ fontSize: 20, marginBottom: 4 }}>{gameMode === 'ai' ? '🤖' : '⚔️'}</div>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#5C3D28' }}>
               {gameMode === 'ai' ? `AI (${aiDifficulty === 'easy' ? '쉬움' : aiDifficulty === 'normal' ? '보통' : '어려움'})` : '1:1 대전'}
@@ -537,7 +559,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
 
           {/* Spectator count (PVP 전용) */}
           {isPvp && spectators.length > 0 && (
-            <div style={{ background: 'rgba(255,248,236,0.9)', borderRadius: 14, padding: '10px', border: '1px solid #E0CCB0', textAlign: 'center' }}>
+            <div style={{ flex: isNarrow ? '1 1 90px' : 'none', background: 'rgba(255,248,236,0.9)', borderRadius: 14, padding: '10px', border: '1px solid #E0CCB0', textAlign: 'center' }}>
               <div style={{ fontSize: 16, marginBottom: 2 }}>👀</div>
               <div style={{ fontSize: 11, fontWeight: 600, color: '#5C3D28' }}>관전자 {spectators.length}명</div>
             </div>
@@ -548,6 +570,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
             onClick={handleUndoRequest}
             disabled={!!winner || moveCount < 1 || modal !== 'none' || turn !== myColor}
             style={{
+              flex: isNarrow ? '1 1 90px' : 'none',
               padding: '13px 8px', borderRadius: 14,
               border: '1.5px solid #C9A87C', background: '#FFF8EC',
               color: '#5C3D28', fontSize: 12, fontWeight: 700, cursor: 'pointer',
@@ -565,6 +588,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
             onClick={() => !winner && modal === 'none' && setModal('resign_confirm')}
             disabled={!!winner || modal !== 'none'}
             style={{
+              flex: isNarrow ? '1 1 90px' : 'none',
               padding: '13px 8px', borderRadius: 14,
               border: '1.5px solid rgba(232,93,64,0.4)',
               background: 'rgba(232,93,64,0.06)', color: '#C94C2E',
@@ -581,11 +605,11 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
       </div>
 
       {/* Bottom player bar */}
-      <div style={{ background: 'rgba(255,248,236,0.9)', borderTop: '1px solid #E0CCB0', padding: '0 24px', flexShrink: 0 }}>
+      <div style={{ background: 'rgba(255,248,236,0.9)', borderTop: '1px solid #E0CCB0', padding: isNarrow ? '0 10px' : '0 24px', flexShrink: 0 }}>
         <PlayerBar
           nickname={user.nickname} character={user.character} photoUrl={user.photoUrl}
           color={myColor} isMyTurn={turn === myColor && !winner} timerSeconds={timerSec}
-          animState={animStateFor(myColor)}
+          animState={animStateFor(myColor)} compact={isNarrow}
         />
       </div>
 

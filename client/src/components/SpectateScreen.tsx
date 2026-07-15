@@ -4,6 +4,7 @@ import { subscribeRoom, type RoomState } from '../lib/rooms'
 import { startSpectating, stopSpectating, subscribeSpectators, type Spectator } from '../lib/spectators'
 import { CharacterAvatar } from '../lib/characters'
 import type { Cell } from '../lib/omokAI'
+import { useResponsiveBoard } from '../lib/useResponsiveBoard'
 
 interface Props {
   user: User
@@ -12,8 +13,8 @@ interface Props {
 }
 
 const SIZE = 15
-const CELL = 32
-const PAD = 24
+const MAX_CELL = 32
+const MAX_PAD = 24
 
 // 진행 중인 다른 사람의 대국을 그냥 지켜보기만 하는 화면.
 // GameScreen과 달리 돌을 놓거나 기권/무르기를 할 수 없다 — 방 문서를 읽기만 한다.
@@ -42,7 +43,11 @@ export default function SpectateScreen({ user, roomId, onLeave }: Props) {
     return subscribeSpectators(roomId, setSpectators)
   }, [roomId])
 
-  const boardPx = CELL * (SIZE - 1) + PAD * 2
+  // 관전 화면은 사이드바가 없어서 레이아웃 방향은 안 바뀌지만, 보드 크기는 화면에 맞춰 줄어든다.
+  const { boardPx, pad, cell: cellPx } = useResponsiveBoard({
+    size: SIZE, maxCell: MAX_CELL, maxPad: MAX_PAD, minBoard: 260,
+    rowReservedH: 40, rowReservedV: 210, colReservedH: 40, colReservedV: 210,
+  })
 
   if (roomDeleted) {
     return (
@@ -69,8 +74,8 @@ export default function SpectateScreen({ user, roomId, onLeave }: Props) {
   const isWinCell = (r: number, c: number) => room.winLine.some(([wr, wc]) => wr === r && wc === c)
 
   return (
-    <div style={{ minHeight: '100vh', background: '#F5EDD8', display: 'flex', flexDirection: 'column', fontFamily: "'Noto Sans KR', sans-serif" }}>
-      <div style={{ background: 'rgba(255,248,236,0.9)', borderBottom: '1px solid #E0CCB0', padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div style={{ minHeight: '100vh', background: '#F5EDD8', display: 'flex', flexDirection: 'column', fontFamily: "'Noto Sans KR', sans-serif", overflowX: 'hidden' }}>
+      <div style={{ background: 'rgba(255,248,236,0.9)', borderBottom: '1px solid #E0CCB0', padding: '14px 16px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <button onClick={onLeave} style={{ background: 'none', border: 'none', color: '#8B5E3C', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
           ← 로비로 돌아가기
         </button>
@@ -112,8 +117,8 @@ export default function SpectateScreen({ user, roomId, onLeave }: Props) {
           style={{
             width: boardPx, height: boardPx, position: 'relative',
             background:
-              'repeating-linear-gradient(90deg,rgba(140,90,30,0.07) 0,rgba(140,90,30,0.07) 1px,transparent 1px,transparent 32px),' +
-              'repeating-linear-gradient(rgba(140,90,30,0.07) 0,rgba(140,90,30,0.07) 1px,transparent 1px,transparent 32px),' +
+              `repeating-linear-gradient(90deg,rgba(140,90,30,0.07) 0,rgba(140,90,30,0.07) 1px,transparent 1px,transparent ${cellPx}px),` +
+              `repeating-linear-gradient(rgba(140,90,30,0.07) 0,rgba(140,90,30,0.07) 1px,transparent 1px,transparent ${cellPx}px),` +
               'linear-gradient(160deg,#D4A055 0%,#C08A40 25%,#B87A35 50%,#C89048 75%,#D4A055 100%)',
             borderRadius: 8, userSelect: 'none',
             boxShadow: '0 12px 40px rgba(61,43,31,0.35),0 4px 12px rgba(61,43,31,0.2)',
@@ -123,20 +128,20 @@ export default function SpectateScreen({ user, roomId, onLeave }: Props) {
           <svg style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }} width={boardPx} height={boardPx}>
             {Array.from({ length: SIZE }, (_, i) => (
               <g key={i}>
-                <line x1={PAD + i * CELL} y1={PAD} x2={PAD + i * CELL} y2={PAD + (SIZE - 1) * CELL}
+                <line x1={pad + i * cellPx} y1={pad} x2={pad + i * cellPx} y2={pad + (SIZE - 1) * cellPx}
                   stroke="rgba(80,45,15,0.55)" strokeWidth={i === 0 || i === SIZE - 1 ? 1.5 : 1} />
-                <line x1={PAD} y1={PAD + i * CELL} x2={PAD + (SIZE - 1) * CELL} y2={PAD + i * CELL}
+                <line x1={pad} y1={pad + i * cellPx} x2={pad + (SIZE - 1) * cellPx} y2={pad + i * cellPx}
                   stroke="rgba(80,45,15,0.55)" strokeWidth={i === 0 || i === SIZE - 1 ? 1.5 : 1} />
               </g>
             ))}
             {[[3,3],[3,7],[3,11],[7,3],[7,7],[7,11],[11,3],[11,7],[11,11]].map(([r, c]) => (
-              <circle key={`${r}-${c}`} cx={PAD + c * CELL} cy={PAD + r * CELL} r={4} fill="rgba(75,40,12,0.55)" />
+              <circle key={`${r}-${c}`} cx={pad + c * cellPx} cy={pad + r * cellPx} r={4 * (cellPx / MAX_CELL)} fill="rgba(75,40,12,0.55)" />
             ))}
           </svg>
 
           {room.board.map((rowArr, row) =>
-            rowArr.map((cell, col) => {
-              if (!cell) return null
+            rowArr.map((stone, col) => {
+              if (!stone) return null
               const isLast = room.lastMove?.[0] === row && room.lastMove?.[1] === col
               const isWin = isWinCell(row, col)
               return (
@@ -144,28 +149,28 @@ export default function SpectateScreen({ user, roomId, onLeave }: Props) {
                   key={`${row}-${col}`}
                   style={{
                     position: 'absolute',
-                    left: PAD + col * CELL - CELL / 2, top: PAD + row * CELL - CELL / 2,
-                    width: CELL, height: CELL,
+                    left: pad + col * cellPx - cellPx / 2, top: pad + row * cellPx - cellPx / 2,
+                    width: cellPx, height: cellPx,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1,
                   }}
                 >
                   <div style={{
-                    width: CELL - 4, height: CELL - 4, borderRadius: '50%',
-                    background: cell === 'black'
+                    width: cellPx - 4, height: cellPx - 4, borderRadius: '50%',
+                    background: stone === 'black'
                       ? 'radial-gradient(circle at 32% 30%,#646464,#111)'
                       : 'radial-gradient(circle at 32% 30%,#FFFAF2,#C8BBAA)',
                     boxShadow: isWin
-                      ? `0 0 0 3px #E85D40,0 3px 10px rgba(0,0,0,${cell === 'black' ? '0.6' : '0.25'})`
-                      : cell === 'black'
+                      ? `0 0 0 3px #E85D40,0 3px 10px rgba(0,0,0,${stone === 'black' ? '0.6' : '0.25'})`
+                      : stone === 'black'
                       ? '2px 5px 10px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.18)'
                       : '2px 5px 8px rgba(0,0,0,0.22),inset 0 1px 0 rgba(255,255,255,0.9)',
-                    border: cell === 'white' ? '1px solid #A89070' : 'none',
+                    border: stone === 'white' ? '1px solid #A89070' : 'none',
                     position: 'relative',
                   }}>
                     {isLast && (
                       <div style={{
                         position: 'absolute', inset: '30%', borderRadius: '50%',
-                        background: cell === 'black' ? 'rgba(255,100,60,0.85)' : 'rgba(200,70,40,0.7)',
+                        background: stone === 'black' ? 'rgba(255,100,60,0.85)' : 'rgba(200,70,40,0.7)',
                       }} />
                     )}
                   </div>
