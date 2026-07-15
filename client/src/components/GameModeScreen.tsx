@@ -317,9 +317,7 @@ export default function GameModeScreen({ user, onStartAi, onStartPvp, onBack }: 
                 border: '1px solid #EDE0CC', fontSize: 12, color: '#9A7A62', lineHeight: 1.6,
               }}
             >
-              <strong style={{ color: '#5C3D28' }}>개발자 메모:</strong> AI는 "즉시 승리 → 즉시 차단 → 점수 기반 선택" 우선순위 규칙으로 두며,
-              어려움 난이도는 상대의 최선 응수까지 한 수 더 내다봅니다.{' '}
-              <code style={{ background: '#EDE0CC', padding: '1px 4px', borderRadius: 4 }}>src/lib/omokAI.ts</code> 참고.
+              
             </div>
 
             <button
