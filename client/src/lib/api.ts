@@ -20,6 +20,7 @@ interface UserDoc {
   photoUrl: string | null
   wins: number
   losses: number
+  isGuest?: boolean
 }
 
 function toUser(id: string, data: UserDoc): User {
@@ -55,7 +56,7 @@ function friendlyAuthError(err: unknown): Error {
 export async function register(email: string, password: string, nickname: string): Promise<{ user: User }> {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, password)
-    const profile: UserDoc = { email, nickname, character: 'bear', photoUrl: null, wins: 0, losses: 0 }
+    const profile: UserDoc = { email, nickname, character: 'bear', photoUrl: null, wins: 0, losses: 0, isGuest: false }
     await setDoc(doc(db, 'users', cred.user.uid), { ...profile, createdAt: serverTimestamp(), lastActiveAt: serverTimestamp() })
     return { user: toUser(cred.user.uid, profile) }
   } catch (err) {
@@ -80,7 +81,7 @@ export async function loginAsGuest(): Promise<{ user: User }> {
   try {
     const cred = await signInAnonymously(auth)
     const guestNumber = Math.floor(1000 + Math.random() * 9000)
-    const profile: UserDoc = { email: '', nickname: `게스트${guestNumber}`, character: 'bear', photoUrl: null, wins: 0, losses: 0 }
+    const profile: UserDoc = { email: '', nickname: `게스트${guestNumber}`, character: 'bear', photoUrl: null, wins: 0, losses: 0, isGuest: true }
     await setDoc(doc(db, 'users', cred.user.uid), { ...profile, createdAt: serverTimestamp(), lastActiveAt: serverTimestamp() })
     return { user: toUser(cred.user.uid, profile) }
   } catch (err) {
@@ -122,6 +123,7 @@ export async function getRanking(): Promise<{ players: RankingEntry[] }> {
   const snap = await getDocs(query(collection(db, 'users'), orderBy('wins', 'desc')))
   const players = snap.docs
     .map((d) => d.data() as UserDoc)
+    .filter((d) => !d.isGuest && d.email !== '') // 게스트(익명 로그인)는 랭킹에서 제외 — isGuest 필드가 없는 예전 게스트 계정도 이메일이 없다는 점으로 함께 걸러낸다
     .sort((a, b) => b.wins - a.wins || a.losses - b.losses)
     .map((d, i) => ({
       rank: i + 1,
