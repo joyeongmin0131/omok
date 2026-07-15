@@ -208,8 +208,10 @@ function findImmediateWin(board: Cell[][], candidates: [number, number][], color
  * @param difficulty 난이도 ('easy' | 'normal' | 'hard')
  * @returns          [row, col] 착수 위치
  */
-// 쉬움 난이도는 상대의 승리 위협을 이 확률로만 막는다 (나머지는 못 본 척 넘어감 → 훨씬 쉬움)
+// 난이도별로 상대의 승리 위협을 이 확률로만 막는다 (나머지는 못 본 척 넘어감).
+// 어려움은 항상(100%) 막는다.
 const EASY_BLOCK_CHANCE = 0.25
+const NORMAL_BLOCK_CHANCE = 0.8
 
 export async function getAiMove(
   board: Cell[][],
@@ -226,9 +228,9 @@ export async function getAiMove(
   const winMove = findImmediateWin(b, candidates, aiColor)
   if (winMove) return winMove
 
-  // 2. 상대가 다음 수에 이길 수 있으면 막는다 — 쉬움은 가끔 놓치고, 보통/어려움은 항상 막는다
-  const shouldCheckBlock = difficulty !== 'easy' || Math.random() < EASY_BLOCK_CHANCE
-  if (shouldCheckBlock) {
+  // 2. 상대가 다음 수에 이길 수 있으면 막는다 — 난이도가 낮을수록 가끔 놓친다 (어려움은 항상 막음)
+  const blockChance = difficulty === 'hard' ? 1 : difficulty === 'normal' ? NORMAL_BLOCK_CHANCE : EASY_BLOCK_CHANCE
+  if (Math.random() < blockChance) {
     const blockMove = findImmediateWin(b, candidates, humanColor)
     if (blockMove) return blockMove
   }
@@ -238,9 +240,11 @@ export async function getAiMove(
     return candidates[Math.floor(Math.random() * candidates.length)]
   }
 
-  // 4. 보통: 지금 당장 공격+수비 점수가 가장 높은 자리에 둔다 (앞을 내다보지 않는 1수 판단)
+  // 4. 보통: 공격+수비 점수가 가장 높은 후보 2개 중에서 고른다 (앞을 내다보지 않고, 가끔 최선이
+  //    아닌 차선을 선택할 수 있어서 완전히 최적수만 두는 것보다 살짝 허점이 생긴다)
   if (difficulty === 'normal') {
-    return candidates[0]
+    const pool = candidates.slice(0, 2)
+    return pool[Math.floor(Math.random() * pool.length)]
   }
 
   // 5. 어려움: "나 → 상대 최선 응수 → 나의 최선 응수"까지 세 수를 내다본다.
