@@ -42,7 +42,7 @@ export default function LoginScreen({ onAuthenticated }: Props) {
       return
     }
     if (password.length < 6) {
-      setError('비밀번호는 6자 이상이어야 해요.')
+      setError('비밀번호는 6자 이상이어야 해욧@!!@')
       return
     }
 
@@ -191,7 +191,7 @@ export default function LoginScreen({ onAuthenticated }: Props) {
               fontWeight: 500,
             }}
           >
-            과연 오목왕은 누구? 🏆
+            오목왕이될상인가? 🏆
           </p>
         </div>
 

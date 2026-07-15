@@ -218,7 +218,7 @@ export default function RankingTab({ user }: { user: User }) {
             fontSize: 22, fontWeight: 900, color: '#3D2B1F', margin: '0 0 6px',
           }}
         >
-          🏆 학급 오목 랭킹
+          🏆 오목왕 랭킹
         </h2>
         <p style={{ fontSize: 13, color: '#9A7A62', margin: 0 }}>
           {myRank ? `내 순위: ${myRank}위 · ` : ''}총 {players.length}명 참여 중

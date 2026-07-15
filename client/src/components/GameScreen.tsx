@@ -622,7 +622,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
               선공 정하는 중...
             </h3>
             <p style={{ color: '#9A7A62', fontSize: 13, margin: '0 0 24px' }}>
-              룰렛으로 누가 흑돌(선공)이 될지 정해요!
+              룰렛으로 누가 흑돌(선공)이 될지 정해요. ㄹㅇ 운이니까 의심ㄴ
             </p>
             {!rouletteRevealed ? (
               <div
@@ -709,7 +709,7 @@ export default function GameScreen({ user, gameMode, aiDifficulty, pvpRoomId, on
               {resultWin ? '승리!' : '패배...'}
             </h2>
             <p style={{ color: resultWin ? '#5C3D28' : '#9A7A62', fontSize: 14, margin: '0 0 4px' }}>
-              {resultWin ? '오목왕에 한 발짝 가까워졌어요 🎉' : '다음엔 꼭 이길 수 있어요 💪'}
+              {resultWin ? '오목왕이될상인가ㅋ 🎉' : '아 좀 아쉽네요 노력하세요 💪'}
             </p>
             <p style={{ color: '#B09070', fontSize: 12, margin: '0 0 20px' }}>총 {moveCount}수</p>
 

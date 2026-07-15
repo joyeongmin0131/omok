@@ -348,7 +348,7 @@ export default function ProfileSetupScreen({ user, onComplete, onCancel }: Props
               </button>
             </div>
             <p style={{ fontSize: 11, color: '#9A7A62', margin: '6px 0 0' }}>
-              올린 사진은 캐릭터 얼굴 자리에 동그랗게 나타나요 (선택사항)
+              올린 사진은 캐릭터 얼굴 자리에 동그랗게 나타나요 (선택사항!!)
             </p>
             {cameraError && (
               <p style={{ fontSize: 11, color: '#C0401F', margin: '4px 0 0' }}>{cameraError}</p>
@@ -412,7 +412,7 @@ export default function ProfileSetupScreen({ user, onComplete, onCancel }: Props
               <span style={{ fontSize: 12, color: '#C0401F' }}>{error}</span>
             ) : (
               <span style={{ fontSize: 12, color: '#9A7A62' }}>
-                친구들에게 보여질 이름이에요
+                유저에게 보여지니까 신중하게!
               </span>
             )}
             <span style={{ fontSize: 12, color: '#C9A87C' }}>{nickname.length}/12</span>
@@ -463,7 +463,7 @@ export default function ProfileSetupScreen({ user, onComplete, onCancel }: Props
               cursor: nickname.trim().length >= 2 && !loading ? 'pointer' : 'not-allowed',
             }}
           >
-            {loading ? '저장 중...' : isEdit ? '저장하기' : '오목판으로 출발! 🎮'}
+            {loading ? '저장 중...' : isEdit ? '저장하기' : '오목판으로 가보자잉 🎮'}
           </button>
         </div>
       </div>

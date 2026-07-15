@@ -268,10 +268,10 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
               >
                 <div>
                   <h2 style={{ fontFamily: "'Noto Serif KR', serif", fontSize: 20, fontWeight: 900, color: '#FFF8EC', margin: '0 0 4px' }}>
-                    지금 바로 시작해보세요!
+                    지금 바로 시작해보세용
                   </h2>
                   <p style={{ fontSize: 13, color: 'rgba(255,248,236,0.8)', margin: 0 }}>
-                    친구와 1:1 대전 또는 AI와 연습 대전
+                    친구와 1:1 대전 또는 AI와 연습 대전?
                   </p>
                 </div>
                 <button
@@ -309,7 +309,7 @@ export default function LobbyScreen({ user, onStartGame, onLogout, onEditProfile
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {activeRooms.length === 0 && (
-                    <p style={{ fontSize: 13, color: '#9A7A62', margin: 0 }}>지금은 진행 중인 1:1 대국이 없어요.</p>
+                    <p style={{ fontSize: 13, color: '#9A7A62', margin: 0 }}>지금은 진행 중인 1:1 대전이 없어요.</p>
                   )}
                   {activeRooms.map((room) => (
                     <div
